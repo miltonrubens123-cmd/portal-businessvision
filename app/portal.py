@@ -108,60 +108,68 @@ if st.session_state.logado:
     menu = st.sidebar.selectbox("Menu", menu_itens)
 
     # ----------------------------
-    # NOVA SOLICITAÇÃO
-    # ----------------------------
-    if menu == "Nova Solicitação":
-        st.header("Nova Solicitação")
-        if st.session_state.usuario == "admin":
-            # Admin pode selecionar o cliente
-            c.execute("SELECT id, nome FROM clientes WHERE ativo=1")
-            clientes_ativos = c.fetchall()
+# NOVA SOLICITAÇÃO
+# ----------------------------
+if menu == "Nova Solicitação":
+    st.header("Nova Solicitação")
+
+    if st.session_state.usuario == "admin":
+        # Admin seleciona cliente ativo
+        with conn:
+            clientes_ativos = c.execute(
+                "SELECT id, nome FROM clientes WHERE ativo=1"
+            ).fetchall()
+        if clientes_ativos:
             cliente_id = st.selectbox(
                 "Selecione Cliente", [f"{c[0]} - {c[1]}" for c in clientes_ativos]
             )
             cliente_id = int(cliente_id.split(" - ")[0])
-            solicitante = st.text_input("Nome do Solicitante")
         else:
-            cliente_id = st.session_state.cliente_id
-            solicitante = st.session_state.cliente_nome
+            st.warning("Não há clientes ativos cadastrados.")
+            cliente_id = None
+        solicitante = st.text_input("Nome do Solicitante")
+        complexidade = st.selectbox("Complexidade", ["Leve", "Média", "Complexa"])
+        prazo = st.number_input(
+            "Prazo (em horas)", min_value=1, max_value=168, value=24
+        )
+    else:
+        # Cliente logado
+        cliente_id = st.session_state.cliente_id
+        solicitante = st.session_state.cliente_nome
+        complexidade = ""
+        prazo = None
 
-        titulo = st.text_input("Título")
-        descricao = st.text_area("Descrição")
-        prioridade = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
+    titulo = st.text_input("Título")
+    descricao = st.text_area("Descrição")
+    prioridade = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
 
-        if st.session_state.usuario == "admin":
-            complexidade = st.selectbox("Complexidade", ["Leve", "Média", "Complexa"])
-            prazo = st.number_input(
-                "Prazo (em horas)", min_value=1, max_value=168, value=24
-            )
+    if st.button("Enviar"):
+        if cliente_id is None:
+            st.error("Não é possível enviar solicitação sem cliente selecionado.")
         else:
-            complexidade = ""
-            prazo = None
-
-        if st.button("Enviar"):
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            c.execute(
-                """
-            INSERT INTO solicitacoes
-            (cliente_id, solicitante, titulo, descricao, prioridade, status, resposta, complexidade, prazo, data_inicio, data_fim, data_criacao)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    cliente_id,
-                    solicitante,
-                    titulo,
-                    descricao,
-                    prioridade,
-                    "Pendente",
-                    "",
-                    complexidade,
-                    prazo,
-                    now,
-                    None,
-                    now,
-                ),
-            )
-            conn.commit()
+            with conn:
+                c.execute(
+                    """
+                INSERT INTO solicitacoes
+                (cliente_id, solicitante, titulo, descricao, prioridade, status, resposta, complexidade, prazo, data_inicio, data_fim, data_criacao)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        cliente_id,
+                        solicitante,
+                        titulo,
+                        descricao,
+                        prioridade,
+                        "Pendente",
+                        "",
+                        complexidade,
+                        prazo,
+                        now,
+                        None,
+                        now,
+                    ),
+                )
             st.success("Solicitação enviada com sucesso!")
 
     # ----------------------------
