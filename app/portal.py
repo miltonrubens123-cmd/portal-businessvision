@@ -10,57 +10,55 @@ import pandas as pd
 # ----------------------------
 st.set_page_config(page_title="Portal Business Vision", layout="wide")
 
-# Caminho relativo ao repositório
+# Caminho da logo
 logo_path = "imagens/logo.png"
 logo = Image.open(logo_path)
 
 # Conexão com banco
-conn = sqlite3.connect(Path(__file__).parent / "dados.db", check_same_thread=False)
-cursor = conn.cursor()
+db_path = Path(__file__).parent / "dados.db"
+conn = sqlite3.connect(db_path, check_same_thread=False)
 
 # ----------------------------
-# CRIAR TABELAS SE NÃO EXISTIREM
+# CRIAR TABELAS
 # ----------------------------
-cursor.execute(
+with conn:
+    conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS clientes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario TEXT UNIQUE,
+        senha TEXT,
+        nome TEXT,
+        ativo INTEGER DEFAULT 1
+    )
     """
-CREATE TABLE IF NOT EXISTS clientes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    usuario TEXT UNIQUE,
-    senha TEXT,
-    nome TEXT,
-    ativo INTEGER DEFAULT 1
-)
-"""
-)
-
-cursor.execute(
+    )
+    conn.execute(
+        """
+    CREATE TABLE IF NOT EXISTS solicitacoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente TEXT,
+        titulo TEXT,
+        descricao TEXT,
+        prioridade TEXT,
+        status TEXT,
+        complexidade TEXT,
+        resposta TEXT,
+        data_criacao TEXT,
+        inicio_atendimento TEXT,
+        fim_atendimento TEXT
+    )
     """
-CREATE TABLE IF NOT EXISTS solicitacoes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    cliente TEXT,
-    titulo TEXT,
-    descricao TEXT,
-    prioridade TEXT,
-    status TEXT,
-    complexidade TEXT,
-    resposta TEXT,
-    data_criacao TEXT,
-    inicio_atendimento TEXT,
-    fim_atendimento TEXT
-)
-"""
-)
-conn.commit()
+    )
 
 # ----------------------------
-# LOGIN SIMPLES
+# LOGIN
 # ----------------------------
 if "logado" not in st.session_state:
     st.session_state.logado = False
 if "usuario" not in st.session_state:
     st.session_state.usuario = ""
 
-# Admin padrão
 admin_user = "admin_business"
 admin_pass = "M@ionese123"
 
@@ -69,12 +67,15 @@ if not st.session_state.logado:
     usuario_input = st.text_input("Usuário")
     senha_input = st.text_input("Senha", type="password")
     if st.button("Entrar"):
+        # Admin
         if usuario_input == admin_user and senha_input == admin_pass:
             st.session_state.logado = True
-            st.session_state.usuario = usuario_input
+            st.session_state.usuario = admin_user
         else:
-            cliente = cursor.execute(
-                "SELECT * FROM clientes WHERE usuario=? AND senha=? AND ativo=1",
+            # Cliente
+            cur = conn.cursor()
+            cliente = cur.execute(
+                "SELECT usuario FROM clientes WHERE usuario=? AND senha=? AND ativo=1",
                 (usuario_input, senha_input),
             ).fetchone()
             if cliente:
@@ -83,10 +84,11 @@ if not st.session_state.logado:
             else:
                 st.error("Usuário ou senha inválidos.")
 
+# ----------------------------
+# APP LOGADO
+# ----------------------------
 if st.session_state.logado:
-    # ----------------------------
-    # CABEÇALHO
-    # ----------------------------
+    # Cabeçalho
     col1, col2 = st.columns([1, 6])
     with col1:
         st.image(logo, width=80)
@@ -98,9 +100,7 @@ if st.session_state.logado:
         )
     st.caption("Gestão de demandas e acompanhamento em tempo real")
 
-    # ----------------------------
-    # MENU LATERAL
-    # ----------------------------
+    # Menu
     if st.session_state.usuario == admin_user:
         menu = st.sidebar.selectbox(
             "Menu",
@@ -121,24 +121,12 @@ if st.session_state.logado:
     # ----------------------------
     if menu == "Nova Solicitação":
         st.header("Nova Solicitação")
-        # Cliente logado envia
-        cliente_nome = (
-            st.session_state.usuario
-            if st.session_state.usuario != admin_user
-            else st.selectbox(
-                "Solicitante (Cliente)",
-                [
-                    u[0]
-                    for u in cursor.execute(
-                        "SELECT usuario FROM clientes WHERE ativo=1"
-                    ).fetchall()
-                ],
-            )
-        )
-
+        cliente_nome = st.session_state.usuario
         titulo = st.text_input("Título")
         descricao = st.text_area("Descrição")
         prioridade = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
+
+        # Complexidade apenas para admin
         if st.session_state.usuario == admin_user:
             complexidade = st.selectbox("Complexidade", ["Leve", "Média", "Complexa"])
         else:
@@ -146,34 +134,36 @@ if st.session_state.logado:
 
         if st.button("Enviar"):
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            cursor.execute(
-                """
-                INSERT INTO solicitacoes (cliente, titulo, descricao, prioridade, status, complexidade, resposta, data_criacao)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    cliente_nome,
-                    titulo,
-                    descricao,
-                    prioridade,
-                    "Pendente",
-                    complexidade,
-                    "",
-                    now,
-                ),
-            )
-            conn.commit()
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO solicitacoes
+                    (cliente, titulo, descricao, prioridade, status, complexidade, resposta, data_criacao)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        cliente_nome,
+                        titulo,
+                        descricao,
+                        prioridade,
+                        "Pendente",
+                        complexidade,
+                        "",
+                        now,
+                    ),
+                )
             st.success("Solicitação enviada com sucesso!")
 
     # ----------------------------
-    # DASHBOARD (Admin)
+    # DASHBOARD
     # ----------------------------
     elif menu == "Dashboard" and st.session_state.usuario == admin_user:
         st.header("Dashboard")
         st.image(logo, width=100)
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        dados = cursor.execute("SELECT * FROM solicitacoes").fetchall()
+        cur = conn.cursor()
+        dados = cur.execute("SELECT * FROM solicitacoes").fetchall()
         df = (
             pd.DataFrame(
                 dados,
@@ -209,7 +199,7 @@ if st.session_state.logado:
             )
         )
 
-        # Cards zerados mesmo sem dados
+        # Cards
         col1, col2, col3 = st.columns(3)
         col1.metric("Total de Solicitações", len(df))
         col2.metric("Finalizadas", len(df[df["Status"] == "Resolvido"]))
@@ -218,6 +208,7 @@ if st.session_state.logado:
             len(df[df["Status"].isin(["Pendente", "Iniciado", "Atrasado"])]),
         )
 
+        # Gráfico de prioridade
         st.subheader("Solicitações por Prioridade")
         if not df.empty:
             resumo = df.groupby("Prioridade")["ID"].count().reset_index()
@@ -226,26 +217,18 @@ if st.session_state.logado:
         else:
             st.write("Nenhuma solicitação registrada ainda.")
 
-        st.subheader("Tempo médio de atendimento (minutos)")
-        if not df.empty and df["Início"].notna().any() and df["Fim"].notna().any():
-            df["Início_dt"] = pd.to_datetime(df["Início"])
-            df["Fim_dt"] = pd.to_datetime(df["Fim"])
-            df["Duracao"] = (df["Fim_dt"] - df["Início_dt"]).dt.total_seconds() / 60
-            st.metric("Tempo médio", round(df["Duracao"].mean(), 2))
-        else:
-            st.metric("Tempo médio", 0)
-
     # ----------------------------
     # DEMANDAS SOLICITADAS
     # ----------------------------
     elif menu == "Demandas Solicitadas":
         st.header("Demandas Solicitadas")
+        cur = conn.cursor()
         clientes = (
             [st.session_state.usuario]
             if st.session_state.usuario != admin_user
             else [
                 u[0]
-                for u in cursor.execute(
+                for u in cur.execute(
                     "SELECT usuario FROM clientes WHERE ativo=1"
                 ).fetchall()
             ]
@@ -253,7 +236,7 @@ if st.session_state.logado:
 
         for cli in clientes:
             st.subheader(f"Cliente: {cli}")
-            dados_cli = cursor.execute(
+            dados_cli = cur.execute(
                 "SELECT * FROM solicitacoes WHERE cliente=?", (cli,)
             ).fetchall()
             if dados_cli:
@@ -285,7 +268,7 @@ if st.session_state.logado:
                 st.info("Nenhuma solicitação para este cliente.")
 
     # ----------------------------
-    # CADASTRO DE CLIENTES (Admin)
+    # CADASTRO DE CLIENTES
     # ----------------------------
     elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
         st.header("Cadastro de Clientes")
@@ -295,9 +278,12 @@ if st.session_state.logado:
         ativo = st.checkbox("Ativo", value=True)
 
         if st.button("Cadastrar"):
-            cursor.execute(
-                "INSERT INTO clientes (usuario, senha, nome, ativo) VALUES (?, ?, ?, ?)",
-                (novo_usuario, senha, nome, int(ativo)),
-            )
-            conn.commit()
-            st.success(f"Cliente {novo_usuario} cadastrado com sucesso!")
+            try:
+                with conn:
+                    conn.execute(
+                        "INSERT INTO clientes (usuario, senha, nome, ativo) VALUES (?, ?, ?, ?)",
+                        (novo_usuario, senha, nome, int(ativo)),
+                    )
+                st.success(f"Cliente {novo_usuario} cadastrado com sucesso!")
+            except sqlite3.IntegrityError:
+                st.error("Usuário já existe, escolha outro.")
