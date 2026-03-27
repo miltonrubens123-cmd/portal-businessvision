@@ -67,22 +67,22 @@ if not st.session_state.logado:
     usuario_input = st.text_input("Usuário")
     senha_input = st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        # Admin
         if usuario_input == admin_user and senha_input == admin_pass:
             st.session_state.logado = True
             st.session_state.usuario = admin_user
         else:
             # Cliente
-            cur = conn.cursor()
-            cliente = cur.execute(
-                "SELECT usuario FROM clientes WHERE usuario=? AND senha=? AND ativo=1",
-                (usuario_input, senha_input),
-            ).fetchone()
-            if cliente:
-                st.session_state.logado = True
-                st.session_state.usuario = usuario_input
-            else:
-                st.error("Usuário ou senha inválidos.")
+            with conn:
+                cur = conn.cursor()
+                cliente = cur.execute(
+                    "SELECT usuario FROM clientes WHERE usuario=? AND senha=? AND ativo=1",
+                    (usuario_input, senha_input),
+                ).fetchone()
+                if cliente:
+                    st.session_state.logado = True
+                    st.session_state.usuario = usuario_input
+                else:
+                    st.error("Usuário ou senha inválidos.")
 
 # ----------------------------
 # APP LOGADO
@@ -162,86 +162,12 @@ if st.session_state.logado:
         st.image(logo, width=100)
         st.markdown("<hr>", unsafe_allow_html=True)
 
-        cur = conn.cursor()
-        dados = cur.execute("SELECT * FROM solicitacoes").fetchall()
-        df = (
-            pd.DataFrame(
-                dados,
-                columns=[
-                    "ID",
-                    "Cliente",
-                    "Título",
-                    "Descrição",
-                    "Prioridade",
-                    "Status",
-                    "Complexidade",
-                    "Resposta",
-                    "Data",
-                    "Início",
-                    "Fim",
-                ],
-            )
-            if dados
-            else pd.DataFrame(
-                columns=[
-                    "ID",
-                    "Cliente",
-                    "Título",
-                    "Descrição",
-                    "Prioridade",
-                    "Status",
-                    "Complexidade",
-                    "Resposta",
-                    "Data",
-                    "Início",
-                    "Fim",
-                ]
-            )
-        )
-
-        # Cards
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total de Solicitações", len(df))
-        col2.metric("Finalizadas", len(df[df["Status"] == "Resolvido"]))
-        col3.metric(
-            "Pendentes/Iniciadas",
-            len(df[df["Status"].isin(["Pendente", "Iniciado", "Atrasado"])]),
-        )
-
-        # Gráfico de prioridade
-        st.subheader("Solicitações por Prioridade")
-        if not df.empty:
-            resumo = df.groupby("Prioridade")["ID"].count().reset_index()
-            resumo.columns = ["Prioridade", "Quantidade"]
-            st.bar_chart(resumo.set_index("Prioridade"))
-        else:
-            st.write("Nenhuma solicitação registrada ainda.")
-
-    # ----------------------------
-    # DEMANDAS SOLICITADAS
-    # ----------------------------
-    elif menu == "Demandas Solicitadas":
-        st.header("Demandas Solicitadas")
-        cur = conn.cursor()
-        clientes = (
-            [st.session_state.usuario]
-            if st.session_state.usuario != admin_user
-            else [
-                u[0]
-                for u in cur.execute(
-                    "SELECT usuario FROM clientes WHERE ativo=1"
-                ).fetchall()
-            ]
-        )
-
-        for cli in clientes:
-            st.subheader(f"Cliente: {cli}")
-            dados_cli = cur.execute(
-                "SELECT * FROM solicitacoes WHERE cliente=?", (cli,)
-            ).fetchall()
-            if dados_cli:
-                df_cli = pd.DataFrame(
-                    dados_cli,
+        with conn:
+            cur = conn.cursor()
+            dados = cur.execute("SELECT * FROM solicitacoes").fetchall()
+            df = (
+                pd.DataFrame(
+                    dados,
                     columns=[
                         "ID",
                         "Cliente",
@@ -256,16 +182,91 @@ if st.session_state.logado:
                         "Fim",
                     ],
                 )
-                status_color = {
-                    "Pendente": "🔴",
-                    "Iniciado": "🟢",
-                    "Atrasado": "⚫",
-                    "Resolvido": "🔵",
-                }
-                df_cli["Status Color"] = df_cli["Status"].map(status_color)
-                st.table(df_cli[["ID", "Título", "Prioridade", "Status Color", "Data"]])
+                if dados
+                else pd.DataFrame(
+                    columns=[
+                        "ID",
+                        "Cliente",
+                        "Título",
+                        "Descrição",
+                        "Prioridade",
+                        "Status",
+                        "Complexidade",
+                        "Resposta",
+                        "Data",
+                        "Início",
+                        "Fim",
+                    ]
+                )
+            )
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total de Solicitações", len(df))
+        col2.metric("Finalizadas", len(df[df["Status"] == "Resolvido"]))
+        col3.metric(
+            "Pendentes/Iniciadas",
+            len(df[df["Status"].isin(["Pendente", "Iniciado", "Atrasado"])]),
+        )
+
+        st.subheader("Solicitações por Prioridade")
+        if not df.empty:
+            resumo = df.groupby("Prioridade")["ID"].count().reset_index()
+            resumo.columns = ["Prioridade", "Quantidade"]
+            st.bar_chart(resumo.set_index("Prioridade"))
+        else:
+            st.write("Nenhuma solicitação registrada ainda.")
+
+    # ----------------------------
+    # DEMANDAS SOLICITADAS
+    # ----------------------------
+    elif menu == "Demandas Solicitadas":
+        st.header("Demandas Solicitadas")
+        with conn:
+            cur = conn.cursor()
+            if st.session_state.usuario == admin_user:
+                clientes = [
+                    u[0]
+                    for u in cur.execute(
+                        "SELECT usuario FROM clientes WHERE ativo=1"
+                    ).fetchall()
+                ]
             else:
-                st.info("Nenhuma solicitação para este cliente.")
+                clientes = [st.session_state.usuario]
+
+            for cli in clientes:
+                st.subheader(f"Cliente: {cli}")
+                dados_cli = cur.execute(
+                    "SELECT * FROM solicitacoes WHERE cliente=?", (cli,)
+                ).fetchall()
+                if dados_cli:
+                    df_cli = pd.DataFrame(
+                        dados_cli,
+                        columns=[
+                            "ID",
+                            "Cliente",
+                            "Título",
+                            "Descrição",
+                            "Prioridade",
+                            "Status",
+                            "Complexidade",
+                            "Resposta",
+                            "Data",
+                            "Início",
+                            "Fim",
+                        ],
+                    )
+                    status_color = {
+                        "Pendente": "🔴",
+                        "Iniciado": "🟢",
+                        "Atrasado": "⚫",
+                        "Resolvido": "🔵",
+                    }
+                    df_cli["Status Color"] = df_cli["Status"].map(status_color)
+                    st.table(
+                        df_cli[["ID", "Título", "Prioridade", "Status Color", "Data"]]
+                    )
+                else:
+                    st.info("Nenhuma solicitação para este cliente.")
 
     # ----------------------------
     # CADASTRO DE CLIENTES
@@ -278,12 +279,20 @@ if st.session_state.logado:
         ativo = st.checkbox("Ativo", value=True)
 
         if st.button("Cadastrar"):
-            try:
-                with conn:
-                    conn.execute(
-                        "INSERT INTO clientes (usuario, senha, nome, ativo) VALUES (?, ?, ?, ?)",
-                        (novo_usuario, senha, nome, int(ativo)),
-                    )
-                st.success(f"Cliente {novo_usuario} cadastrado com sucesso!")
-            except sqlite3.IntegrityError:
-                st.error("Usuário já existe, escolha outro.")
+            if novo_usuario.strip() and senha.strip() and nome.strip():
+                try:
+                    with conn:
+                        conn.execute(
+                            "INSERT INTO clientes (usuario, senha, nome, ativo) VALUES (?, ?, ?, ?)",
+                            (
+                                novo_usuario.strip(),
+                                senha.strip(),
+                                nome.strip(),
+                                int(ativo),
+                            ),
+                        )
+                    st.success(f"Cliente {novo_usuario} cadastrado com sucesso!")
+                except sqlite3.IntegrityError:
+                    st.error("Usuário já existe, escolha outro.")
+            else:
+                st.error("Preencha todos os campos.")
