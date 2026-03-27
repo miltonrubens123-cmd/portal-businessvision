@@ -39,11 +39,16 @@ CREATE TABLE IF NOT EXISTS solicitacoes (
 )
 conn.commit()
 
-# ----------------------------
-# CABEÇALHO
-# ----------------------------
-st.image(logo, width=100)
-st.title("Portal Business Vision")
+# Cabeçalho com logo e título alinhados
+col1, col2 = st.columns([1, 6])  # 1 parte para logo, 6 partes para título
+with col1:
+    st.image(logo, width=80)  # ajusta largura da logo
+with col2:
+    st.markdown(
+        "<h1 style='margin-bottom:0px;'>Portal Business Vision</h1>"
+        "<hr style='border:1px solid #333; margin-top:0px;'>",
+        unsafe_allow_html=True,
+    )
 st.markdown("<hr>", unsafe_allow_html=True)
 st.caption("Gestão de demandas e acompanhamento em tempo real")
 
