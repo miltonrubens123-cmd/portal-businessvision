@@ -16,12 +16,12 @@ logo = Image.open(logo_path)
 
 # Conexão com banco
 conn = sqlite3.connect(Path(__file__).parent / "dados.db", check_same_thread=False)
-c = conn.cursor()
+cursor = conn.cursor()
 
 # ----------------------------
 # CRIAR TABELAS SE NÃO EXISTIREM
 # ----------------------------
-c.execute(
+cursor.execute(
     """
 CREATE TABLE IF NOT EXISTS clientes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS clientes (
 """
 )
 
-c.execute(
+cursor.execute(
     """
 CREATE TABLE IF NOT EXISTS solicitacoes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,26 +60,26 @@ if "logado" not in st.session_state:
 if "usuario" not in st.session_state:
     st.session_state.usuario = ""
 
-# Exemplo de admin padrão
+# Admin padrão
 admin_user = "admin_business"
 admin_pass = "M@ionese123"
 
 if not st.session_state.logado:
     st.title("Login - Portal Business Vision")
-    usuario = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
+    usuario_input = st.text_input("Usuário")
+    senha_input = st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        if usuario == admin_user and senha == admin_pass:
+        if usuario_input == admin_user and senha_input == admin_pass:
             st.session_state.logado = True
-            st.session_state.usuario = usuario
+            st.session_state.usuario = usuario_input
         else:
-            cliente = c.execute(
+            cliente = cursor.execute(
                 "SELECT * FROM clientes WHERE usuario=? AND senha=? AND ativo=1",
-                (usuario, senha),
+                (usuario_input, senha_input),
             ).fetchone()
             if cliente:
                 st.session_state.logado = True
-                st.session_state.usuario = usuario
+                st.session_state.usuario = usuario_input
             else:
                 st.error("Usuário ou senha inválidos.")
 
@@ -121,19 +121,21 @@ if st.session_state.logado:
     # ----------------------------
     if menu == "Nova Solicitação":
         st.header("Nova Solicitação")
-        cliente = (
+        # Cliente logado envia
+        cliente_nome = (
             st.session_state.usuario
             if st.session_state.usuario != admin_user
             else st.selectbox(
                 "Solicitante (Cliente)",
                 [
-                    c[1]
-                    for c in c.execute(
+                    u[0]
+                    for u in cursor.execute(
                         "SELECT usuario FROM clientes WHERE ativo=1"
                     ).fetchall()
                 ],
             )
         )
+
         titulo = st.text_input("Título")
         descricao = st.text_area("Descrição")
         prioridade = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
@@ -144,13 +146,13 @@ if st.session_state.logado:
 
         if st.button("Enviar"):
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            c.execute(
+            cursor.execute(
                 """
                 INSERT INTO solicitacoes (cliente, titulo, descricao, prioridade, status, complexidade, resposta, data_criacao)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
-                    cliente,
+                    cliente_nome,
                     titulo,
                     descricao,
                     prioridade,
@@ -168,10 +170,12 @@ if st.session_state.logado:
     # ----------------------------
     elif menu == "Dashboard" and st.session_state.usuario == admin_user:
         st.header("Dashboard")
+        st.image(logo, width=100)
+        st.markdown("<hr>", unsafe_allow_html=True)
 
-        dados = c.execute("SELECT * FROM solicitacoes").fetchall()
-        if dados:
-            df = pd.DataFrame(
+        dados = cursor.execute("SELECT * FROM solicitacoes").fetchall()
+        df = (
+            pd.DataFrame(
                 dados,
                 columns=[
                     "ID",
@@ -187,51 +191,74 @@ if st.session_state.logado:
                     "Fim",
                 ],
             )
-            # Cards simples
-            st.subheader("Resumo Geral")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total de Solicitações", len(df))
-            col2.metric("Finalizadas", len(df[df["Status"] == "Resolvido"]))
-            col3.metric(
-                "Pendentes/Iniciadas",
-                len(df[df["Status"].isin(["Pendente", "Iniciado", "Atrasado"])]),
+            if dados
+            else pd.DataFrame(
+                columns=[
+                    "ID",
+                    "Cliente",
+                    "Título",
+                    "Descrição",
+                    "Prioridade",
+                    "Status",
+                    "Complexidade",
+                    "Resposta",
+                    "Data",
+                    "Início",
+                    "Fim",
+                ]
             )
+        )
 
-            st.subheader("Solicitações por Prioridade")
+        # Cards zerados mesmo sem dados
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total de Solicitações", len(df))
+        col2.metric("Finalizadas", len(df[df["Status"] == "Resolvido"]))
+        col3.metric(
+            "Pendentes/Iniciadas",
+            len(df[df["Status"].isin(["Pendente", "Iniciado", "Atrasado"])]),
+        )
+
+        st.subheader("Solicitações por Prioridade")
+        if not df.empty:
             resumo = df.groupby("Prioridade")["ID"].count().reset_index()
             resumo.columns = ["Prioridade", "Quantidade"]
             st.bar_chart(resumo.set_index("Prioridade"))
+        else:
+            st.write("Nenhuma solicitação registrada ainda.")
 
-            st.subheader("Tempo médio de atendimento (minutos)")
-            df["Data_dt"] = pd.to_datetime(df["Data"])
+        st.subheader("Tempo médio de atendimento (minutos)")
+        if not df.empty and df["Início"].notna().any() and df["Fim"].notna().any():
             df["Início_dt"] = pd.to_datetime(df["Início"])
             df["Fim_dt"] = pd.to_datetime(df["Fim"])
             df["Duracao"] = (df["Fim_dt"] - df["Início_dt"]).dt.total_seconds() / 60
-            st.write(df["Duracao"].mean())
+            st.metric("Tempo médio", round(df["Duracao"].mean(), 2))
+        else:
+            st.metric("Tempo médio", 0)
 
     # ----------------------------
     # DEMANDAS SOLICITADAS
     # ----------------------------
     elif menu == "Demandas Solicitadas":
         st.header("Demandas Solicitadas")
-        if st.session_state.usuario == admin_user:
-            clientes = [
-                c[1]
-                for c in c.execute(
+        clientes = (
+            [st.session_state.usuario]
+            if st.session_state.usuario != admin_user
+            else [
+                u[0]
+                for u in cursor.execute(
                     "SELECT usuario FROM clientes WHERE ativo=1"
                 ).fetchall()
             ]
-        else:
-            clientes = [st.session_state.usuario]
+        )
 
         for cli in clientes:
             st.subheader(f"Cliente: {cli}")
-            dados = c.execute(
+            dados_cli = cursor.execute(
                 "SELECT * FROM solicitacoes WHERE cliente=?", (cli,)
             ).fetchall()
-            if dados:
-                df = pd.DataFrame(
-                    dados,
+            if dados_cli:
+                df_cli = pd.DataFrame(
+                    dados_cli,
                     columns=[
                         "ID",
                         "Cliente",
@@ -246,15 +273,14 @@ if st.session_state.logado:
                         "Fim",
                     ],
                 )
-                # Mapear cores
                 status_color = {
                     "Pendente": "🔴",
                     "Iniciado": "🟢",
                     "Atrasado": "⚫",
                     "Resolvido": "🔵",
                 }
-                df["Status Color"] = df["Status"].map(status_color)
-                st.table(df[["ID", "Título", "Prioridade", "Status Color", "Data"]])
+                df_cli["Status Color"] = df_cli["Status"].map(status_color)
+                st.table(df_cli[["ID", "Título", "Prioridade", "Status Color", "Data"]])
             else:
                 st.info("Nenhuma solicitação para este cliente.")
 
@@ -269,7 +295,9 @@ if st.session_state.logado:
         ativo = st.checkbox("Ativo", value=True)
 
         if st.button("Cadastrar"):
-            c.execute(
+            cursor.execute(
                 "INSERT INTO clientes (usuario, senha, nome, ativo) VALUES (?, ?, ?, ?)",
                 (novo_usuario, senha, nome, int(ativo)),
             )
+            conn.commit()
+            st.success(f"Cliente {novo_usuario} cadastrado com sucesso!")
