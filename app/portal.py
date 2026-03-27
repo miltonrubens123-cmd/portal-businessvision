@@ -16,6 +16,7 @@ logo_path = "imagens/logo.png"
 logo = Image.open(logo_path)
 
 # Cabeçalho com logo e título alinhados
+# Cabeçalho com logo e título alinhados
 col1, col2 = st.columns([1, 6])
 with col1:
     st.image(logo, width=80)
@@ -25,8 +26,10 @@ with col2:
         "<hr style='border:1px solid #333; margin-top:0px;'>",
         unsafe_allow_html=True,
     )
-st.markdown("<hr>", unsafe_allow_html=True)
+
+# REMOVIDA a segunda linha "<hr>"
 st.caption("Gestão de demandas e acompanhamento em tempo real")
+
 
 # ----------------------------
 # BANCO DE DADOS
