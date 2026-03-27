@@ -10,9 +10,13 @@ import pandas as pd
 # ----------------------------
 st.set_page_config(page_title="Portal Business Vision", layout="wide")
 
-# Caminho da logo
-logo_path = Path(__file__).parent / "imagens" / "logo.png"
+# Caminho correto relativo ao repositório
+logo_path = "imagens/logo.png"
 logo = Image.open(logo_path)
+
+
+# Exibir no sidebar
+st.sidebar.image(logo, width=120)
 
 # Conexão com banco
 conn = sqlite3.connect(Path(__file__).parent / "dados.db", check_same_thread=False)
