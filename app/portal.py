@@ -361,29 +361,6 @@ def aplicar_estilo_login():
             margin-top: 60px;
         }
 
-        .login-title {
-            text-align: center;
-            color: #ffffff;
-            font-size: 22px;
-            font-weight: 700;
-            margin-top: 10px;
-            margin-bottom: 5px;
-        }
-
-        .login-subtitle {
-            text-align: center;
-            color: #c7d7e6;
-            font-size: 13px;
-            margin-bottom: 20px;
-        }
-
-        .login-footer {
-            text-align: center;
-            color: #c7d7e6;
-            font-size: 12px;
-            margin-top: 15px;
-        }
-
         .stTextInput label {
             color: #dfeaf5 !important;
             font-weight: 600 !important;
@@ -416,36 +393,53 @@ def aplicar_estilo_login():
 if not st.session_state.logado:
     aplicar_estilo_login()
 
-    # Centralização
-    esq, centro, dir = st.columns([1.2, 1, 1.2])
+    col1, col2, col3 = st.columns([1.2, 1, 1.2])
 
-    with centro:
+    with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
 
-        # LOGO (SEM ERRO)
-        if logo:
-            st.image(logo, width=120)
-        else:
-            st.markdown(
-                "<div style='text-align:center; color:white; font-size:26px; font-weight:700;'>BUSINESS VISION</div>",
-                unsafe_allow_html=True,
-            )
+        # ----------------------------
+        # LOGO CENTRALIZADA
+        # ----------------------------
+        col_logo1, col_logo2, col_logo3 = st.columns([1, 1, 1])
 
+        with col_logo2:
+            if logo:
+                st.image(logo, width=130)
+            else:
+                st.markdown(
+                    "<div style='text-align:center; font-size:26px; font-weight:700; color:white;'>BUSINESS VISION</div>",
+                    unsafe_allow_html=True,
+                )
+
+        # ESPAÇO
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+        # TÍTULO
         st.markdown(
-            '<div class="login-title">Portal Business Vision</div>',
+            "<div style='text-align:center; color:white; font-size:26px; font-weight:700;'>BUSINESS VISION</div>",
             unsafe_allow_html=True,
         )
 
+        # SUBTÍTULO
         st.markdown(
-            '<div class="login-subtitle">Acesse sua conta</div>',
+            "<div style='text-align:center; color:#c7d7e6; font-size:15px; margin-top:5px;'>PORTAL DO CLIENTE</div>",
             unsafe_allow_html=True,
         )
 
+        # TEXTO
+        st.markdown(
+            "<div style='text-align:center; color:#c7d7e6; font-size:13px; margin-bottom:20px;'>Acesse sua conta</div>",
+            unsafe_allow_html=True,
+        )
+
+        # INPUTS
         usuario_input = st.text_input("Usuário", placeholder="Digite seu usuário")
         senha_input = st.text_input(
             "Senha", type="password", placeholder="Digite sua senha"
         )
 
+        # BOTÃO
         if st.button("ENTRAR →"):
             if (
                 usuario_input.strip() == admin_user
@@ -475,15 +469,15 @@ if not st.session_state.logado:
                 else:
                     st.error("Usuário ou senha inválidos.")
 
+        # RODAPÉ
         st.markdown(
-            '<div class="login-footer">Business Vision • Gestão de Demandas</div>',
+            "<div style='text-align:center; color:#c7d7e6; font-size:12px; margin-top:15px;'>Business Vision • Gestão de Demandas</div>",
             unsafe_allow_html=True,
         )
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.stop()
-
 
 # ----------------------------
 # APP LOGADO
