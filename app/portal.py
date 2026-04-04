@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image
 import pandas as pd
+from zoneinfo import ZoneInfo
 
 # ----------------------------
 # CONFIGURAÇÃO INICIAL
@@ -16,6 +17,7 @@ logo_path = BASE_DIR / "imagens" / "logo.png"
 
 admin_user = "admin_business"
 admin_pass = "M@ionese123"
+APP_TZ = ZoneInfo("America/Santarem")
 
 
 # ----------------------------
@@ -42,6 +44,13 @@ def carregar_logo():
 
 
 logo = carregar_logo()
+
+
+# ----------------------------
+# DATA/HORA
+# ----------------------------
+def agora_str():
+    return datetime.now(APP_TZ).strftime("%Y-%m-%d %H:%M")
 
 
 # ----------------------------
@@ -98,8 +107,8 @@ if "titulo" not in st.session_state:
 if "descricao" not in st.session_state:
     st.session_state.descricao = ""
 
-if "enviado" not in st.session_state:
-    st.session_state.enviado = False
+if "mostrar_legenda" not in st.session_state:
+    st.session_state.mostrar_legenda = False
 
 
 # ----------------------------
@@ -113,7 +122,6 @@ def logout():
 def limpar_formulario():
     st.session_state.titulo = ""
     st.session_state.descricao = ""
-    st.session_state.enviado = False
     st.rerun()
 
 
@@ -126,15 +134,25 @@ def nova_solicitacao():
     st.session_state.logado = logado
     st.session_state.titulo = ""
     st.session_state.descricao = ""
-    st.session_state.enviado = False
+    st.session_state.mostrar_legenda = False
     st.rerun()
 
 
 def formatar_status(status):
     status_map = {
+        "Pendente": "🔴",
+        "Iniciado": "🟢",
+        "Pausado": "🟡",
+        "Resolvido": "🔵",
+    }
+    return status_map.get(status, "⚪")
+
+
+def formatar_status_texto(status):
+    status_map = {
         "Pendente": "🔴 Pendente",
         "Iniciado": "🟢 Iniciado",
-        "Atrasado": "⚫ Atrasado",
+        "Pausado": "🟡 Pausado",
         "Resolvido": "🔵 Resolvido",
     }
     return status_map.get(status, status)
@@ -156,6 +174,48 @@ def obter_nome_cliente(usuario):
             (usuario,),
         ).fetchone()
     return resultado[0] if resultado else usuario
+
+
+def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
+    with conn:
+        cur = conn.cursor()
+        atual = cur.execute(
+            """
+            SELECT inicio_atendimento, fim_atendimento
+            FROM solicitacoes
+            WHERE id = ?
+            """,
+            (solicitacao_id,),
+        ).fetchone()
+
+    inicio_atendimento = atual[0] if atual else None
+    fim_atendimento = atual[1] if atual else None
+    agora = agora_str()
+
+    if novo_status == "Iniciado" and not inicio_atendimento:
+        inicio_atendimento = agora
+
+    if novo_status == "Resolvido":
+        fim_atendimento = agora
+
+    with conn:
+        conn.execute(
+            """
+            UPDATE solicitacoes
+            SET status = ?,
+                resposta = ?,
+                inicio_atendimento = ?,
+                fim_atendimento = ?
+            WHERE id = ?
+            """,
+            (
+                novo_status,
+                observacao.strip(),
+                inicio_atendimento,
+                fim_atendimento,
+                solicitacao_id,
+            ),
+        )
 
 
 # ----------------------------
@@ -213,6 +273,21 @@ with col2:
     )
 
 st.caption("Gestão de demandas e acompanhamento em tempo real")
+
+col_legenda1, col_legenda2 = st.columns([8, 1])
+with col_legenda2:
+    if st.button("📌 Legenda", use_container_width=True):
+        st.session_state.mostrar_legenda = not st.session_state.mostrar_legenda
+
+if st.session_state.mostrar_legenda:
+    st.info(
+        """
+🔴 Pendente  
+🟢 Iniciado  
+🟡 Pausado  
+🔵 Resolvido
+        """
+    )
 
 
 # ----------------------------
@@ -302,7 +377,7 @@ if menu == "Nova Solicitação":
                     WHERE cliente = ?
                       AND titulo = ?
                       AND descricao = ?
-                      AND status IN ('Pendente', 'Iniciado', 'Atrasado')
+                      AND status IN ('Pendente', 'Iniciado', 'Pausado')
                     """,
                     (cliente_nome, titulo.strip(), descricao.strip()),
                 ).fetchone()
@@ -312,8 +387,6 @@ if menu == "Nova Solicitação":
                     "Esta solicitação já foi solicitada antes e ainda está em andamento."
                 )
             else:
-                now = datetime.now().strftime("%Y-%m-%d %H:%M")
-
                 with conn:
                     conn.execute(
                         """
@@ -338,12 +411,14 @@ if menu == "Nova Solicitação":
                             "Pendente",
                             complexidade,
                             "",
-                            now,
+                            agora_str(),
                         ),
                     )
 
                 st.success("Solicitação enviada com sucesso.")
-                st.session_state.enviado = True
+                st.session_state.titulo = ""
+                st.session_state.descricao = ""
+                st.rerun()
 
 
 # ----------------------------
@@ -390,39 +465,157 @@ elif menu == "Demandas Solicitadas":
                 (cli,),
             ).fetchall()
 
-            if dados_cli:
-                df_cli = pd.DataFrame(
-                    dados_cli,
-                    columns=[
-                        "ID",
-                        "Cliente",
-                        "Título",
-                        "Descrição",
-                        "Prioridade",
-                        "Status",
-                        "Complexidade",
-                        "Resposta",
-                        "Data",
-                        "Início",
-                        "Fim",
-                    ],
-                )
+            if not dados_cli:
+                st.info("Nenhuma solicitação para este cliente.")
+                continue
 
+            df_cli = pd.DataFrame(
+                dados_cli,
+                columns=[
+                    "ID",
+                    "Cliente",
+                    "Título",
+                    "Descrição",
+                    "Prioridade",
+                    "Status",
+                    "Complexidade",
+                    "Resposta",
+                    "Data",
+                    "Início",
+                    "Fim",
+                ],
+            )
+
+            if st.session_state.usuario != admin_user:
                 df_exibicao = df_cli.copy()
-                df_exibicao["Status"] = df_exibicao["Status"].apply(formatar_status)
-
-                if st.session_state.usuario != admin_user:
-                    df_exibicao = df_exibicao[
-                        ["ID", "Título", "Prioridade", "Status", "Data"]
-                    ]
-                else:
-                    df_exibicao = df_exibicao[
-                        ["ID", "Título", "Prioridade", "Status", "Complexidade", "Data"]
-                    ]
-
+                df_exibicao["Status"] = df_exibicao["Status"].apply(
+                    formatar_status_texto
+                )
+                df_exibicao["Observações"] = df_exibicao["Resposta"].fillna("")
+                df_exibicao = df_exibicao[
+                    ["ID", "Título", "Prioridade", "Status", "Observações", "Data"]
+                ]
                 st.dataframe(df_exibicao, use_container_width=True)
             else:
-                st.info("Nenhuma solicitação para este cliente.")
+                for _, row in df_cli.iterrows():
+                    status_atual = row["Status"]
+                    solicitacao_id = int(row["ID"])
+
+                    with st.container(border=True):
+                        c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.2, 1.6])
+
+                        with c1:
+                            st.write(f"**#{solicitacao_id}**")
+
+                        with c2:
+                            st.write(f"**{row['Título']}**")
+                            st.caption(row["Descrição"])
+
+                        with c3:
+                            st.write(f"Prioridade: **{row['Prioridade']}**")
+
+                        with c4:
+                            st.write(
+                                f"Status: **{formatar_status_texto(status_atual)}**"
+                            )
+
+                        with c5:
+                            if row["Complexidade"]:
+                                st.write(f"Complexidade: **{row['Complexidade']}**")
+
+                        obs_key = f"obs_{solicitacao_id}"
+                        if obs_key not in st.session_state:
+                            st.session_state[obs_key] = (
+                                row["Resposta"] if row["Resposta"] else ""
+                            )
+
+                        st.text_area(
+                            "Observações",
+                            key=obs_key,
+                            height=90,
+                            placeholder="Digite aqui a observação para o cliente...",
+                        )
+
+                        ac1, ac2, ac3, ac4 = st.columns([1, 1, 1, 4])
+
+                        if status_atual == "Pendente":
+                            with ac1:
+                                if st.button(
+                                    "INICIAR",
+                                    key=f"iniciar_{solicitacao_id}",
+                                    use_container_width=True,
+                                ):
+                                    atualizar_solicitacao(
+                                        solicitacao_id,
+                                        "Iniciado",
+                                        st.session_state[obs_key],
+                                    )
+                                    st.rerun()
+
+                        elif status_atual == "Iniciado":
+                            with ac1:
+                                if st.button(
+                                    "PAUSAR",
+                                    key=f"pausar_{solicitacao_id}",
+                                    use_container_width=True,
+                                ):
+                                    atualizar_solicitacao(
+                                        solicitacao_id,
+                                        "Pausado",
+                                        st.session_state[obs_key],
+                                    )
+                                    st.rerun()
+
+                            with ac2:
+                                if st.button(
+                                    "FINALIZAR",
+                                    key=f"finalizar_{solicitacao_id}",
+                                    use_container_width=True,
+                                ):
+                                    atualizar_solicitacao(
+                                        solicitacao_id,
+                                        "Resolvido",
+                                        st.session_state[obs_key],
+                                    )
+                                    st.rerun()
+
+                        elif status_atual == "Pausado":
+                            with ac1:
+                                if st.button(
+                                    "INICIAR",
+                                    key=f"reiniciar_{solicitacao_id}",
+                                    use_container_width=True,
+                                ):
+                                    atualizar_solicitacao(
+                                        solicitacao_id,
+                                        "Iniciado",
+                                        st.session_state[obs_key],
+                                    )
+                                    st.rerun()
+
+                            with ac2:
+                                if st.button(
+                                    "FINALIZAR",
+                                    key=f"finalizar_pausado_{solicitacao_id}",
+                                    use_container_width=True,
+                                ):
+                                    atualizar_solicitacao(
+                                        solicitacao_id,
+                                        "Resolvido",
+                                        st.session_state[obs_key],
+                                    )
+                                    st.rerun()
+
+                        else:
+                            st.success("Demanda finalizada.")
+
+                        meta1, meta2, meta3 = st.columns(3)
+                        with meta1:
+                            st.caption(f"Criado em: {row['Data'] or ''}")
+                        with meta2:
+                            st.caption(f"Início: {row['Início'] or ''}")
+                        with meta3:
+                            st.caption(f"Fim: {row['Fim'] or ''}")
 
 
 # ----------------------------
@@ -477,7 +670,7 @@ elif menu == "Dashboard" and st.session_state.usuario == admin_user:
     total = len(df)
     finalizadas = len(df[df["Status"] == "Resolvido"])
     pendentes_iniciadas = len(
-        df[df["Status"].isin(["Pendente", "Iniciado", "Atrasado"])]
+        df[df["Status"].isin(["Pendente", "Iniciado", "Pausado"])]
     )
 
     col1, col2, col3 = st.columns(3)
@@ -551,6 +744,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                         ),
                     )
                 st.success(f"Cliente {novo_usuario.strip()} cadastrado com sucesso.")
+                st.rerun()
             except sqlite3.IntegrityError:
                 st.error("Usuário já existe. Escolha outro.")
         else:
@@ -570,13 +764,73 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
         ).fetchall()
 
     if clientes:
-        df_clientes = pd.DataFrame(
-            clientes,
-            columns=["ID", "Usuário", "Nome", "Ativo"],
-        )
-        df_clientes["Ativo"] = df_clientes["Ativo"].apply(
-            lambda x: "Sim" if x == 1 else "Não"
-        )
-        st.dataframe(df_clientes, use_container_width=True)
+        for cli in clientes:
+            id_cli, usuario, nome_cli, ativo_cli = cli
+
+            with st.container(border=True):
+                col1, col2, col3, col4 = st.columns([2, 3, 1.5, 2.5])
+
+                with col1:
+                    st.write(f"**{usuario}**")
+
+                with col2:
+                    st.write(nome_cli)
+
+                with col3:
+                    status_cliente = "🟢 Ativo" if ativo_cli == 1 else "🔴 Inativo"
+                    st.write(status_cliente)
+
+                with col4:
+                    b1, b2 = st.columns(2)
+
+                    with b1:
+                        if ativo_cli == 1:
+                            if st.button(
+                                "Inativar",
+                                key=f"inativar_{id_cli}",
+                                use_container_width=True,
+                            ):
+                                with conn:
+                                    conn.execute(
+                                        "UPDATE clientes SET ativo = 0 WHERE id = ?",
+                                        (id_cli,),
+                                    )
+                                st.rerun()
+                        else:
+                            if st.button(
+                                "Ativar",
+                                key=f"ativar_{id_cli}",
+                                use_container_width=True,
+                            ):
+                                with conn:
+                                    conn.execute(
+                                        "UPDATE clientes SET ativo = 1 WHERE id = ?",
+                                        (id_cli,),
+                                    )
+                                st.rerun()
+
+                    with b2:
+                        if st.button(
+                            "Excluir", key=f"excluir_{id_cli}", use_container_width=True
+                        ):
+                            with conn:
+                                cur = conn.cursor()
+                                tem_solicitacao = cur.execute(
+                                    "SELECT 1 FROM solicitacoes WHERE cliente = ? LIMIT 1",
+                                    (usuario,),
+                                ).fetchone()
+
+                            if tem_solicitacao:
+                                st.warning(
+                                    f"O cliente {usuario} possui solicitações. Inative ao invés de excluir."
+                                )
+                            else:
+                                with conn:
+                                    conn.execute(
+                                        "DELETE FROM clientes WHERE id = ?",
+                                        (id_cli,),
+                                    )
+                                st.success(f"Cliente {usuario} excluído.")
+                                st.rerun()
     else:
         st.info("Nenhum cliente cadastrado ainda.")
