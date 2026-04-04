@@ -218,16 +218,156 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
         )
 
 
+def obter_nome_exibicao(usuario):
+    if usuario == admin_user:
+        return "Administrador"
+
+    with conn:
+        cur = conn.cursor()
+        resultado = cur.execute(
+            "SELECT nome FROM clientes WHERE usuario = ?",
+            (usuario,),
+        ).fetchone()
+
+    return resultado[0] if resultado else usuario
+
+
+def aplicar_estilo_login():
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(180deg, #06213d 0%, #0a3760 100%);
+        }
+
+        section[data-testid="stSidebar"] {
+            display: none;
+        }
+
+        div[data-testid="stAppViewContainer"] > .main {
+            padding-top: 0rem;
+        }
+
+        .login-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-card {
+            width: 430px;
+            background: rgba(32, 74, 114, 0.92);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 24px;
+            padding: 34px 30px 28px 30px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+            backdrop-filter: blur(6px);
+        }
+
+        .login-logo {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 16px;
+        }
+
+        .login-title {
+            text-align: center;
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: 700;
+            margin-top: 8px;
+            margin-bottom: 2px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            color: #c7d7e6;
+            font-size: 13px;
+            margin-bottom: 26px;
+        }
+
+        .stTextInput label {
+            color: #dfeaf5 !important;
+            font-weight: 600 !important;
+        }
+
+        .stTextInput > div > div > input {
+            background-color: rgba(255,255,255,0.06) !important;
+            color: white !important;
+            border: 1px solid rgba(173, 216, 255, 0.22) !important;
+            border-radius: 10px !important;
+            height: 48px !important;
+        }
+
+        .stTextInput > div > div > input::placeholder {
+            color: #c7d7e6 !important;
+        }
+
+        .stButton > button {
+            width: 100%;
+            height: 48px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(90deg, #18b7d9 0%, #2c73d2 100%);
+            color: white;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .stButton > button:hover {
+            border: none;
+            color: white;
+            filter: brightness(1.05);
+        }
+
+        .login-footer {
+            text-align: center;
+            color: #c7d7e6;
+            font-size: 12px;
+            margin-top: 16px;
+        }
+
+        .block-container {
+            max-width: 100% !important;
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ----------------------------
 # LOGIN
 # ----------------------------
 if not st.session_state.logado:
-    st.title("Login - Portal Business Vision")
+    aplicar_estilo_login()
 
-    usuario_input = st.text_input("Usuário")
-    senha_input = st.text_input("Senha", type="password")
+    st.markdown('<div class="login-wrapper">', unsafe_allow_html=True)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
 
-    if st.button("Entrar"):
+    if logo:
+        st.markdown('<div class="login-logo">', unsafe_allow_html=True)
+        st.image(logo, width=95)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="login-title">Portal Business Vision</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="login-subtitle">Acesse sua conta</div>',
+        unsafe_allow_html=True,
+    )
+
+    usuario_input = st.text_input("Usuário", placeholder="Digite seu usuário")
+    senha_input = st.text_input(
+        "Senha", type="password", placeholder="Digite sua senha"
+    )
+
+    if st.button("ENTRAR →"):
         if usuario_input.strip() == admin_user and senha_input.strip() == admin_pass:
             st.session_state.logado = True
             st.session_state.usuario = admin_user
@@ -252,6 +392,14 @@ if not st.session_state.logado:
                 st.rerun()
             else:
                 st.error("Usuário ou senha inválidos.")
+
+    st.markdown(
+        '<div class="login-footer">Business Vision • Gestão de Demandas</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     st.stop()
 
