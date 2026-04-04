@@ -322,6 +322,15 @@ def obter_nome_exibicao(usuario):
     return resultado[0] if resultado else usuario
 
 
+def carregar_logo():
+    try:
+        if logo_path.exists():
+            return Image.open(logo_path)
+    except Exception as e:
+        st.warning(f"Erro ao carregar logo: {e}")
+    return None
+
+
 # ----------------------------
 # LOGIN
 # ----------------------------
@@ -332,9 +341,14 @@ if not st.session_state.logado:
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
 
     if logo:
-        st.markdown('<div class="login-logo">', unsafe_allow_html=True)
-        st.image(logo, width=95)
-        st.markdown("</div>", unsafe_allow_html=True)
+        col_logo1, col_logo2, col_logo3 = st.columns([1, 1, 1])
+    with col_logo2:
+        st.image(logo, width=120)
+else:
+    st.markdown(
+        "<div style='text-align:center; color:white; font-size:28px; font-weight:700;'>BUSINESS VISION</div>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         '<div class="login-title">Portal Business Vision</div>',
@@ -404,21 +418,6 @@ with col2:
     )
 
 st.caption("Gestão de demandas e acompanhamento em tempo real")
-
-col_legenda1, col_legenda2 = st.columns([8, 1])
-with col_legenda2:
-    if st.button("📌 Legenda", use_container_width=True):
-        st.session_state.mostrar_legenda = not st.session_state.mostrar_legenda
-
-if st.session_state.mostrar_legenda:
-    st.info(
-        """
-🔴 Pendente  
-🟢 Iniciado  
-🟡 Pausado  
-🔵 Resolvido
-        """
-    )
 
 
 # ----------------------------
@@ -558,6 +557,24 @@ if menu == "Nova Solicitação":
 elif menu == "Demandas Solicitadas":
     st.header("Demandas Solicitadas")
 
+
+col_legenda1, col_legenda2 = st.columns([8, 1])
+
+with col_legenda2:
+    if st.button("📌 Legenda", use_container_width=True):
+        st.session_state.mostrar_legenda = not st.session_state.get(
+            "mostrar_legenda", False
+        )
+
+if st.session_state.get("mostrar_legenda", False):
+    st.info(
+        """
+🔴 Pendente  
+🟢 Iniciado  
+🟡 Pausado  
+🔵 Resolvido
+        """
+    )
     with conn:
         cur = conn.cursor()
 
