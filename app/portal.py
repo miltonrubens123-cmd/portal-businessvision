@@ -110,6 +110,9 @@ if "descricao" not in st.session_state:
 if "mostrar_legenda" not in st.session_state:
     st.session_state.mostrar_legenda = False
 
+if "limpar_campos_nova_solicitacao" not in st.session_state:
+    st.session_state.limpar_campos_nova_solicitacao = False
+
 
 # ----------------------------
 # FUNÇÕES AUXILIARES
@@ -120,8 +123,7 @@ def logout():
 
 
 def limpar_formulario():
-    st.session_state.titulo = ""
-    st.session_state.descricao = ""
+    st.session_state.limpar_campos_nova_solicitacao = True
     st.rerun()
 
 
@@ -135,6 +137,7 @@ def nova_solicitacao():
     st.session_state.titulo = ""
     st.session_state.descricao = ""
     st.session_state.mostrar_legenda = False
+    st.session_state.limpar_campos_nova_solicitacao = False
     st.rerun()
 
 
@@ -533,6 +536,11 @@ if st.sidebar.button("Trocar usuário"):
 if menu == "Nova Solicitação":
     st.header("Nova Solicitação")
 
+    if st.session_state.get("limpar_campos_nova_solicitacao", False):
+        st.session_state["titulo"] = ""
+        st.session_state["descricao"] = ""
+        st.session_state.limpar_campos_nova_solicitacao = False
+
     if st.session_state.usuario == admin_user:
         clientes_ativos = obter_clientes_ativos()
 
@@ -623,11 +631,9 @@ if menu == "Nova Solicitação":
                         ),
                     )
 
+                st.session_state.limpar_campos_nova_solicitacao = True
                 st.success("Solicitação enviada com sucesso.")
-                st.session_state.titulo = ""
-                st.session_state.descricao = ""
                 st.rerun()
-
 
 # ----------------------------
 # DEMANDAS SOLICITADAS
