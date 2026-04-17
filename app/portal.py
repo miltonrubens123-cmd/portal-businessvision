@@ -88,8 +88,31 @@ def criar_tabelas():
             """
         )
 
+        colunas_clientes = {
+            row[1] for row in conn.execute("PRAGMA table_info(clientes)").fetchall()
+        }
 
-criar_tabelas()
+        if "ativo" not in colunas_clientes:
+            conn.execute("ALTER TABLE clientes ADD COLUMN ativo INTEGER DEFAULT 1")
+
+        colunas_solicitacoes = {
+            row[1] for row in conn.execute("PRAGMA table_info(solicitacoes)").fetchall()
+        }
+
+        if "complexidade" not in colunas_solicitacoes:
+            conn.execute("ALTER TABLE solicitacoes ADD COLUMN complexidade TEXT")
+
+        if "resposta" not in colunas_solicitacoes:
+            conn.execute("ALTER TABLE solicitacoes ADD COLUMN resposta TEXT")
+
+        if "data_criacao" not in colunas_solicitacoes:
+            conn.execute("ALTER TABLE solicitacoes ADD COLUMN data_criacao TEXT")
+
+        if "inicio_atendimento" not in colunas_solicitacoes:
+            conn.execute("ALTER TABLE solicitacoes ADD COLUMN inicio_atendimento TEXT")
+
+        if "fim_atendimento" not in colunas_solicitacoes:
+            conn.execute("ALTER TABLE solicitacoes ADD COLUMN fim_atendimento TEXT")
 
 
 # ----------------------------
