@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).parent
 db_path = BASE_DIR / "dados.db"
 logo_path = BASE_DIR / "imagens" / "logo.png"
 
-admin_user = "admin_business"
+admin_user = "Milton"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
