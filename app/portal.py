@@ -208,6 +208,7 @@ def atualizar_menu_query_param(menu):
     if st.session_state.get("auth_token"):
         st.query_params["token"] = st.session_state.auth_token
 
+
 def logout():
     token = st.session_state.get("auth_token", "")
     if token:
