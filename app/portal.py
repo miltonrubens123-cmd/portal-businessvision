@@ -24,10 +24,13 @@ db_path = APP_DATA_DIR / 'dados.db'
 
 logo_candidates = [
     BASE_DIR / 'imagens' / 'logo.png',
+    BASE_DIR / 'imagens' / 'Logo.png',
     BASE_DIR / 'Logo.png',
     BASE_DIR / 'logo.png',
+    BASE_DIR.parent / 'Logo.png',
+    BASE_DIR.parent / 'logo.png',
 ]
-logo_path = next((p for p in logo_candidates if p.exists()), logo_candidates[0])
+logo_path = next((p for p in logo_candidates if p.exists()), None)
 
 admin_user = 'admin_business'
 admin_pass = 'M@ionese123'
@@ -53,16 +56,16 @@ conn = get_connection()
 # ----------------------------
 def carregar_logo():
     try:
-        if logo_path.exists():
+        if logo_path and logo_path.exists():
             return Image.open(logo_path)
     except Exception:
         pass
     return None
 
 
-def logo_base64():
+def carregar_logo_base64():
     try:
-        if logo_path.exists():
+        if logo_path and logo_path.exists():
             return base64.b64encode(logo_path.read_bytes()).decode()
     except Exception:
         pass
@@ -70,6 +73,7 @@ def logo_base64():
 
 
 logo = carregar_logo()
+logo_b64 = carregar_logo_base64()
 
 
 # ----------------------------
@@ -369,6 +373,44 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
         )
 
 
+def render_anexos_como_arquivo(solicitacao_id, prefixo='anexo'):
+    anexos = conn.execute(
+        '''
+        SELECT id, nome_arquivo, observacao, imagem
+        FROM anexos
+        WHERE solicitacao_id = ?
+        ORDER BY id
+        ''',
+        (solicitacao_id,),
+    ).fetchall()
+
+    if not anexos:
+        return
+
+    st.markdown('**Anexos do cliente:**')
+    for anexo in anexos:
+        nome_arquivo = anexo['nome_arquivo'] or 'arquivo'
+        observacao = anexo['observacao'] or 'Sem observação'
+        ext = Path(nome_arquivo).suffix.lower()
+        mime = 'image/png'
+        if ext in ['.jpg', '.jpeg']:
+            mime = 'image/jpeg'
+        elif ext == '.webp':
+            mime = 'image/webp'
+
+        with st.expander(f"📎 {nome_arquivo}"):
+            st.caption(observacao)
+            st.image(anexo['imagem'], use_container_width=True)
+            st.download_button(
+                label='Baixar arquivo',
+                data=anexo['imagem'],
+                file_name=nome_arquivo,
+                mime=mime,
+                key=f"{prefixo}_download_{anexo['id']}",
+                use_container_width=False,
+            )
+
+
 def aplicar_estilo_login():
     st.markdown(
         '''
@@ -425,12 +467,11 @@ if not st.session_state.logado:
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
 
-        encoded_logo = logo_base64()
-        if encoded_logo:
+        if logo_b64:
             st.markdown(
                 f"""
                 <div style='display:flex; justify-content:center; margin-bottom:18px;'>
-                    <img src='data:image/png;base64,{encoded_logo}' width='140'>
+                    <img src='data:image/png;base64,{logo_b64}' width='140'>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -499,13 +540,20 @@ if not st.session_state.logado:
 # ----------------------------
 # APP LOGADO
 # ----------------------------
-col1, col2 = st.columns([0.6, 8])
+header_logo_col, header_title_col = st.columns([0.8, 8])
 
-with col1:
-    if logo:
-        st.image(logo, width=60)
+with header_logo_col:
+    if logo_b64:
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; height:72px;">
+                <img src="data:image/png;base64,{logo_b64}" style="max-width:72px; max-height:72px;">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-with col2:
+with header_title_col:
     st.markdown("<h1 style='margin-bottom:0;'>Portal Business Vision</h1>", unsafe_allow_html=True)
 
 st.markdown("<hr style='border:1px solid #333; margin-top:0;'>", unsafe_allow_html=True)
@@ -748,26 +796,7 @@ elif menu == 'Demandas Solicitadas':
             st.dataframe(df_exibicao, use_container_width=True)
 
             for _, row in df_cli.iterrows():
-                anexos = conn.execute(
-                    '''
-                    SELECT nome_arquivo, observacao, imagem
-                    FROM anexos
-                    WHERE solicitacao_id = ?
-                    ORDER BY id
-                    ''',
-                    (int(row['id']),),
-                ).fetchall()
-
-                if anexos:
-                    with st.expander(f"Ver anexos da solicitação #{int(row['id'])}"):
-                        cols = st.columns(min(3, max(1, len(anexos))))
-                        for i, anexo in enumerate(anexos):
-                            with cols[i % len(cols)]:
-                                st.image(
-                                    anexo['imagem'],
-                                    caption=anexo['observacao'] or anexo['nome_arquivo'],
-                                    use_container_width=True,
-                                )
+                render_anexos_como_arquivo(int(row['id']), prefixo=f"cliente_{int(row['id'])}")
         else:
             for _, row in df_cli.iterrows():
                 status_atual = row['status']
@@ -789,26 +818,7 @@ elif menu == 'Demandas Solicitadas':
                         if row['complexidade']:
                             st.write(f"Complexidade: **{row['complexidade']}**")
 
-                    anexos = conn.execute(
-                        '''
-                        SELECT nome_arquivo, observacao, imagem
-                        FROM anexos
-                        WHERE solicitacao_id = ?
-                        ORDER BY id
-                        ''',
-                        (solicitacao_id,),
-                    ).fetchall()
-
-                    if anexos:
-                        st.markdown('**Anexos do cliente:**')
-                        cols = st.columns(min(3, max(1, len(anexos))))
-                        for i, anexo in enumerate(anexos):
-                            with cols[i % len(cols)]:
-                                st.image(
-                                    anexo['imagem'],
-                                    caption=anexo['observacao'] or anexo['nome_arquivo'],
-                                    use_container_width=True,
-                                )
+                    render_anexos_como_arquivo(solicitacao_id, prefixo=f"admin_{solicitacao_id}")
 
                     obs_key = f'obs_{solicitacao_id}'
                     if obs_key not in st.session_state:
@@ -941,100 +951,102 @@ elif menu == 'Dashboard' and st.session_state.usuario == admin_user:
 elif menu == 'Cadastro de Clientes' and st.session_state.usuario == admin_user:
     st.header('Cadastro de Clientes')
 
-    st.subheader('Cadastro de Empresa')
-    c1, c2 = st.columns(2)
-    with c1:
-        cnpj = st.text_input('CNPJ')
-        razao_social = st.text_input('Razão Social')
-        fantasia = st.text_input('Nome Fantasia')
-        cep = st.text_input('CEP')
-    with c2:
-        logradouro = st.text_input('Logradouro')
-        numero = st.text_input('Número')
-        bairro = st.text_input('Bairro')
-        cidade = st.text_input('Cidade')
+    with st.expander('🏢 Cadastro de Empresa', expanded=False):
+        c1, c2 = st.columns(2)
+        with c1:
+            cnpj = st.text_input('CNPJ')
+            razao_social = st.text_input('Razão Social')
+            fantasia = st.text_input('Nome Fantasia')
+            cep = st.text_input('CEP')
+        with c2:
+            logradouro = st.text_input('Logradouro')
+            numero = st.text_input('Número')
+            bairro = st.text_input('Bairro')
+            cidade = st.text_input('Cidade')
 
-    if st.button('Cadastrar Empresa'):
-        if not fantasia.strip() or not razao_social.strip():
-            st.error('Preencha pelo menos Razão Social e Nome Fantasia.')
-        else:
-            with conn:
-                conn.execute(
-                    '''
-                    INSERT INTO empresas
-                    (cnpj, razao_social, fantasia, cep, logradouro, numero, bairro, cidade, ativo)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-                    ''',
-                    (
-                        cnpj.strip(),
-                        razao_social.strip(),
-                        fantasia.strip(),
-                        cep.strip(),
-                        logradouro.strip(),
-                        numero.strip(),
-                        bairro.strip(),
-                        cidade.strip(),
-                    ),
-                )
-            st.success('Empresa cadastrada com sucesso.')
-            st.rerun()
-
-    st.markdown('---')
-    st.subheader('Cadastro de Usuário')
-    nome_completo = st.text_input('Nome completo')
-    cpf = st.text_input('CPF')
-
-    empresas = conn.execute(
-        'SELECT id, fantasia FROM empresas WHERE ativo = 1 ORDER BY fantasia'
-    ).fetchall()
-
-    if empresas:
-        labels_empresas = [row['fantasia'] for row in empresas]
-        mapa_empresas = {row['fantasia']: row['id'] for row in empresas}
-        empresa_sel = st.selectbox('Empresa', labels_empresas)
-        empresa_id = mapa_empresas[empresa_sel]
-    else:
-        empresa_id = None
-        st.warning('Cadastre pelo menos uma empresa antes de criar usuários.')
-
-    sugestao_usuario = gerar_usuario(nome_completo) if nome_completo.strip() else ''
-    usuario = st.text_input('Usuário', value=sugestao_usuario)
-    senha = st.text_input('Senha', type='password')
-    funcao = st.text_input('Função')
-    ativo = st.checkbox('Ativo', value=True)
-
-    if st.button('Cadastrar Usuário'):
-        if not empresa_id:
-            st.error('É necessário cadastrar uma empresa primeiro.')
-        elif not nome_completo.strip() or not cpf.strip() or not usuario.strip() or not senha.strip():
-            st.error('Preencha os campos obrigatórios.')
-        else:
-            existe = conn.execute('SELECT 1 FROM clientes WHERE usuario = ?', (usuario.strip(),)).fetchone()
-
-            if existe:
-                st.error('Usuário já existe. Informe outro usuário.')
+        if st.button('Cadastrar Empresa'):
+            if not fantasia.strip() or not razao_social.strip():
+                st.error('Preencha pelo menos Razão Social e Nome Fantasia.')
             else:
                 with conn:
                     conn.execute(
                         '''
-                        INSERT INTO clientes (usuario, senha, nome, ativo, cpf, empresa_id, funcao)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO empresas
+                        (cnpj, razao_social, fantasia, cep, logradouro, numero, bairro, cidade, ativo)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
                         ''',
                         (
-                            usuario.strip(),
-                            senha.strip(),
-                            nome_completo.strip(),
-                            int(ativo),
-                            cpf.strip(),
-                            empresa_id,
-                            funcao.strip(),
+                            cnpj.strip(),
+                            razao_social.strip(),
+                            fantasia.strip(),
+                            cep.strip(),
+                            logradouro.strip(),
+                            numero.strip(),
+                            bairro.strip(),
+                            cidade.strip(),
                         ),
                     )
-                st.success(f'Usuário {usuario.strip()} cadastrado com sucesso.')
+                st.success('Empresa cadastrada com sucesso.')
                 st.rerun()
+
+    with st.expander('👤 Cadastro de Usuário', expanded=True):
+        nome_completo = st.text_input('Nome completo')
+        cpf = st.text_input('CPF')
+
+        empresas = conn.execute(
+            'SELECT id, fantasia FROM empresas WHERE ativo = 1 ORDER BY fantasia'
+        ).fetchall()
+
+        if empresas:
+            labels_empresas = [row['fantasia'] for row in empresas]
+            mapa_empresas = {row['fantasia']: row['id'] for row in empresas}
+            empresa_sel = st.selectbox('Empresa', labels_empresas)
+            empresa_id = mapa_empresas[empresa_sel]
+        else:
+            empresa_id = None
+            st.warning('Cadastre pelo menos uma empresa antes de criar usuários.')
+
+        sugestao_usuario = gerar_usuario(nome_completo) if nome_completo.strip() else ''
+        usuario = st.text_input('Usuário', value=sugestao_usuario)
+        senha = st.text_input('Senha', type='password')
+        funcao = st.text_input('Função')
+        ativo = st.checkbox('Ativo', value=True)
+
+        if st.button('Cadastrar Usuário'):
+            if not empresa_id:
+                st.error('É necessário cadastrar uma empresa primeiro.')
+            elif not nome_completo.strip() or not cpf.strip() or not usuario.strip() or not senha.strip():
+                st.error('Preencha os campos obrigatórios.')
+            else:
+                existe = conn.execute('SELECT 1 FROM clientes WHERE usuario = ?', (usuario.strip(),)).fetchone()
+
+                if existe:
+                    st.error('Usuário já existe. Informe outro usuário.')
+                else:
+                    with conn:
+                        conn.execute(
+                            '''
+                            INSERT INTO clientes (usuario, senha, nome, ativo, cpf, empresa_id, funcao)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ''',
+                            (
+                                usuario.strip(),
+                                senha.strip(),
+                                nome_completo.strip(),
+                                int(ativo),
+                                cpf.strip(),
+                                empresa_id,
+                                funcao.strip(),
+                            ),
+                        )
+                    st.success(f'Usuário {usuario.strip()} cadastrado com sucesso.')
+                    st.rerun()
 
     st.markdown('---')
     st.subheader('Clientes cadastrados')
+
+    if 'cliente_editando_id' not in st.session_state:
+        st.session_state.cliente_editando_id = None
 
     clientes = conn.execute(
         '''
@@ -1045,6 +1057,7 @@ elif menu == 'Cadastro de Clientes' and st.session_state.usuario == admin_user:
             c.ativo,
             c.cpf,
             c.funcao,
+            c.empresa_id,
             e.fantasia AS empresa
         FROM clientes c
         LEFT JOIN empresas e ON e.id = c.empresa_id
@@ -1052,11 +1065,17 @@ elif menu == 'Cadastro de Clientes' and st.session_state.usuario == admin_user:
         '''
     ).fetchall()
 
+    empresas_ativas = conn.execute(
+        'SELECT id, fantasia FROM empresas WHERE ativo = 1 ORDER BY fantasia'
+    ).fetchall()
+    mapa_empresas_id_nome = {row['id']: row['fantasia'] for row in empresas_ativas}
+    labels_empresas = [row['fantasia'] for row in empresas_ativas]
+
     if clientes:
         for cli in clientes:
             id_cli = cli['id']
             with st.container(border=True):
-                col1, col2, col3, col4, col5 = st.columns([2, 2.5, 2, 1.2, 2.5])
+                col1, col2, col3, col4, col5 = st.columns([2, 2.5, 2, 1.2, 3.5])
 
                 with col1:
                     st.write(f"**{cli['usuario']}**")
@@ -1074,7 +1093,7 @@ elif menu == 'Cadastro de Clientes' and st.session_state.usuario == admin_user:
                     st.write(status_cliente)
 
                 with col5:
-                    b1, b2 = st.columns(2)
+                    b1, b2, b3 = st.columns(3)
                     with b1:
                         if cli['ativo'] == 1:
                             if st.button('Inativar', key=f'inativar_{id_cli}', use_container_width=True):
@@ -1103,5 +1122,106 @@ elif menu == 'Cadastro de Clientes' and st.session_state.usuario == admin_user:
                                     conn.execute('DELETE FROM clientes WHERE id = ?', (id_cli,))
                                 st.success(f"Cliente {cli['usuario']} excluído.")
                                 st.rerun()
+
+                    with b3:
+                        if st.button('Alterar', key=f'alterar_{id_cli}', use_container_width=True):
+                            st.session_state.cliente_editando_id = id_cli
+                            st.rerun()
+
+                if st.session_state.cliente_editando_id == id_cli:
+                    st.markdown('**Alteração de cadastro**')
+                    e1, e2, e3 = st.columns(3)
+
+                    with e1:
+                        novo_nome = st.text_input('Nome completo', value=cli['nome'] or '', key=f'edit_nome_{id_cli}')
+                        novo_cpf = st.text_input('CPF', value=cli['cpf'] or '', key=f'edit_cpf_{id_cli}')
+                    with e2:
+                        novo_usuario = st.text_input('Usuário', value=cli['usuario'] or '', key=f'edit_usuario_{id_cli}')
+                        nova_funcao = st.text_input('Função', value=cli['funcao'] or '', key=f'edit_funcao_{id_cli}')
+                    with e3:
+                        empresa_atual_nome = mapa_empresas_id_nome.get(cli['empresa_id'])
+                        if labels_empresas:
+                            idx_empresa = labels_empresas.index(empresa_atual_nome) if empresa_atual_nome in labels_empresas else 0
+                            empresa_edit_nome = st.selectbox(
+                                'Empresa',
+                                labels_empresas,
+                                index=idx_empresa,
+                                key=f'edit_empresa_{id_cli}',
+                            )
+                            nova_empresa_id = next(
+                                row['id'] for row in empresas_ativas if row['fantasia'] == empresa_edit_nome
+                            )
+                        else:
+                            st.warning('Não há empresas ativas para vincular.')
+                            nova_empresa_id = cli['empresa_id']
+
+                        nova_senha = st.text_input(
+                            'Nova senha (opcional)',
+                            type='password',
+                            key=f'edit_senha_{id_cli}',
+                        )
+
+                    a1, a2 = st.columns(2)
+                    with a1:
+                        if st.button('Salvar alteração', key=f'salvar_alteracao_{id_cli}', use_container_width=True):
+                            if not novo_nome.strip() or not novo_cpf.strip() or not novo_usuario.strip():
+                                st.error('Preencha nome, CPF e usuário.')
+                            else:
+                                usuario_existente = conn.execute(
+                                    'SELECT 1 FROM clientes WHERE usuario = ? AND id <> ?',
+                                    (novo_usuario.strip(), id_cli),
+                                ).fetchone()
+
+                                if usuario_existente:
+                                    st.error('Já existe outro cliente com esse usuário.')
+                                else:
+                                    with conn:
+                                        if nova_senha.strip():
+                                            conn.execute(
+                                                '''
+                                                UPDATE clientes
+                                                SET nome = ?, cpf = ?, usuario = ?, funcao = ?, empresa_id = ?, senha = ?
+                                                WHERE id = ?
+                                                ''',
+                                                (
+                                                    novo_nome.strip(),
+                                                    novo_cpf.strip(),
+                                                    novo_usuario.strip(),
+                                                    nova_funcao.strip(),
+                                                    nova_empresa_id,
+                                                    nova_senha.strip(),
+                                                    id_cli,
+                                                ),
+                                            )
+                                        else:
+                                            conn.execute(
+                                                '''
+                                                UPDATE clientes
+                                                SET nome = ?, cpf = ?, usuario = ?, funcao = ?, empresa_id = ?
+                                                WHERE id = ?
+                                                ''',
+                                                (
+                                                    novo_nome.strip(),
+                                                    novo_cpf.strip(),
+                                                    novo_usuario.strip(),
+                                                    nova_funcao.strip(),
+                                                    nova_empresa_id,
+                                                    id_cli,
+                                                ),
+                                            )
+
+                                    with conn:
+                                        conn.execute(
+                                            'UPDATE solicitacoes SET cliente = ? WHERE cliente = ?',
+                                            (novo_usuario.strip(), cli['usuario']),
+                                        )
+                                    st.session_state.cliente_editando_id = None
+                                    st.success('Cadastro atualizado com sucesso.')
+                                    st.rerun()
+
+                    with a2:
+                        if st.button('Cancelar alteração', key=f'cancelar_alteracao_{id_cli}', use_container_width=True):
+                            st.session_state.cliente_editando_id = None
+                            st.rerun()
     else:
         st.info('Nenhum cliente cadastrado ainda.')
