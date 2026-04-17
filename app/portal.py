@@ -435,26 +435,39 @@ def aplicar_estilo_login():
         .stApp {
             background: linear-gradient(180deg, #061C33 0%, #0B3A63 100%);
         }
+
         section[data-testid="stSidebar"] {
             display: none;
         }
+
+        /* CENTRALIZAÇÃO TOTAL */
         .block-container {
-            padding-top: 2rem !important;
-            padding-bottom: 2rem !important;
-            max-width: 100% !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
         }
-        
-        .stTextInput label, .stTextArea label, .stSelectbox label, .stFileUploader label {
+
+        /* CONTEÚDO LOGIN */
+        .login-wrapper {
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .stTextInput label {
             color: #dfeaf5 !important;
             font-weight: 600 !important;
         }
-        .stTextInput > div > div > input,
-        .stTextArea textarea {
+
+        .stTextInput > div > div > input {
             background-color: rgba(255,255,255,0.06) !important;
             color: white !important;
             border: 1px solid rgba(173, 216, 255, 0.22) !important;
             border-radius: 10px !important;
         }
+
         .stButton > button {
             width: 100%;
             border-radius: 12px;
