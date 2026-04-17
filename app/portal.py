@@ -607,19 +607,41 @@ if menu == "Nova Solicitação":
         if not titulo.strip() or not descricao.strip():
             st.warning("Preencha título e descrição antes de enviar.")
         else:
-            with conn:
-                cur = conn.cursor()
-                duplicado = cur.execute(
-                    """
-                    SELECT id
-                    FROM solicitacoes
-                    WHERE cliente = ?
-                      AND titulo = ?
-                      AND descricao = ?
-                      AND status IN ('Pendente', 'Iniciado', 'Pausado')
-                    """,
-                    (cliente_nome, titulo.strip(), descricao.strip()),
-                ).fetchone()
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                            INSERT INTO solicitacoes
+                            (
+                                cliente,
+                                titulo,
+                                descricao,
+                                prioridade,
+                                status,
+                                complexidade,
+                                resposta,
+                                data_criacao
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                        (
+                            cliente_nome,
+                            titulo.strip(),
+                            descricao.strip(),
+                            prioridade,
+                            "Pendente",
+                            complexidade,
+                            "",
+                            agora_str(),
+                        ),
+                    )
+
+                st.session_state.limpar_campos_nova_solicitacao = True
+                st.success("Solicitação enviada com sucesso.")
+                st.rerun()
+
+            except sqlite3.OperationalError as e:
+                st.error(f"Erro de estrutura no banco de dados: {e}")
 
             if duplicado:
                 st.warning(
