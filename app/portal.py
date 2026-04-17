@@ -455,6 +455,14 @@ def aplicar_estilo_login():
         unsafe_allow_html=True,
     )
 
+    st.markdown("""
+<style>
+div[style*="background"] {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ----------------------------
 # LOGIN
