@@ -8,9 +8,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from PIL import Image
+import psycopg 
 from zoneinfo import ZoneInfo
 
-
+def get_conn():
+    return psycopg.connect(
+        st.secrets["database"]["url"]
+    )
 # ----------------------------
 # CONFIGURAÇÃO INICIAL
 # ----------------------------
