@@ -1,3 +1,4 @@
+import os
 import base64
 import re
 import sqlite3
@@ -11,10 +12,18 @@ from PIL import Image
 import psycopg 
 from zoneinfo import ZoneInfo
 
-def get_conn():
-    return psycopg.connect(
-        st.secrets["database"]["url"]
-    )
+
+def get_connection():
+    if "database" in st.secrets:
+        database_url = st.secrets["database"]["url"]
+    else:
+        database_url = os.getenv("DATABASE_URL")
+
+    if not database_url:
+        raise RuntimeError("DATABASE_URL não configurado.")
+
+    return psycopg.connect(database_url)
+
 # ----------------------------
 # CONFIGURAÇÃO INICIAL
 # ----------------------------
