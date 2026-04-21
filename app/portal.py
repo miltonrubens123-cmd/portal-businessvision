@@ -1,6 +1,9 @@
 import os
 import base64
+import hashlib
+import hmac
 import re
+import secrets
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -87,11 +90,164 @@ logo_candidates = [
 ]
 logo_path = next((p for p in logo_candidates if p.exists()), None)
 
-admin_user = "admin_business"
-admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
 conn = SafeConnProxy()  # proxy com reconexão automática
+
+
+# ----------------------------
+# SEGURANÇA / AUTENTICAÇÃO
+# ----------------------------
+PASSWORD_SCHEME = "pbkdf2_sha256"
+PASSWORD_ITERATIONS = 390000
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "8"))
+
+
+def obter_secret(path, default=None):
+    try:
+        cursor = st.secrets
+        for key in path:
+            cursor = cursor[key]
+        return cursor
+    except Exception:
+        return default
+
+
+def obter_admin_config():
+    admin_user = (
+        obter_secret(["admin", "user"])
+        or os.getenv("ADMIN_USER")
+        or ""
+    ).strip()
+
+    admin_password_hash = (
+        obter_secret(["admin", "password_hash"])
+        or os.getenv("ADMIN_PASSWORD_HASH")
+        or ""
+    ).strip()
+
+    admin_password_plain = (
+        obter_secret(["admin", "password"])
+        or os.getenv("ADMIN_PASSWORD")
+        or ""
+    ).strip()
+
+    return {
+        "user": admin_user,
+        "password_hash": admin_password_hash,
+        "password_plain": admin_password_plain,
+    }
+
+
+def senha_esta_hasheada(valor):
+    return isinstance(valor, str) and valor.startswith(f"{PASSWORD_SCHEME}$")
+
+
+def gerar_hash_senha(senha):
+    if not isinstance(senha, str) or not senha.strip():
+        raise ValueError("Senha inválida para geração de hash.")
+
+    salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        senha.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_ITERATIONS,
+    )
+    return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${salt}${dk.hex()}"
+
+
+def verificar_senha(senha_informada, senha_armazenada):
+    if not senha_armazenada or not isinstance(senha_armazenada, str):
+        return False
+
+    if senha_esta_hasheada(senha_armazenada):
+        try:
+            _, iteracoes, salt, hash_salvo = senha_armazenada.split("$", 3)
+            dk = hashlib.pbkdf2_hmac(
+                "sha256",
+                (senha_informada or "").encode("utf-8"),
+                salt.encode("utf-8"),
+                int(iteracoes),
+            )
+            return hmac.compare_digest(dk.hex(), hash_salvo)
+        except Exception:
+            return False
+
+    return hmac.compare_digest(senha_armazenada, senha_informada or "")
+
+
+def autenticar_admin(usuario_digitado, senha_digitada):
+    config = obter_admin_config()
+    admin_user = config["user"]
+    admin_password_hash = config["password_hash"]
+    admin_password_plain = config["password_plain"]
+
+    if not admin_user or usuario_digitado != admin_user:
+        return False
+
+    if admin_password_hash:
+        return verificar_senha(senha_digitada, admin_password_hash)
+
+    if admin_password_plain:
+        return hmac.compare_digest(admin_password_plain, senha_digitada or "")
+
+    return False
+
+
+def obter_cliente_por_usuario(usuario):
+    return conn.execute(
+        """
+        SELECT id, usuario, senha, nome, ativo, cpf, empresa_id, funcao
+        FROM clientes
+        WHERE usuario = %s
+        LIMIT 1
+        """,
+        (usuario,),
+    ).fetchone()
+
+
+def autenticar_cliente(usuario_digitado, senha_digitada):
+    cliente = obter_cliente_por_usuario(usuario_digitado)
+
+    if not cliente or not bool(cliente["ativo"]):
+        return None
+
+    senha_salva = cliente["senha"] or ""
+    autenticado = verificar_senha(senha_digitada, senha_salva)
+
+    if autenticado and not senha_esta_hasheada(senha_salva):
+        conn.execute(
+            "UPDATE clientes SET senha = %s WHERE id = %s",
+            (gerar_hash_senha(senha_digitada), cliente["id"]),
+        )
+        cliente = obter_cliente_por_usuario(usuario_digitado)
+
+    return cliente if autenticado else None
+
+
+def validar_upload_imagem(arquivo):
+    nome = (arquivo.name or "").lower()
+    ext_permitidas = {".png", ".jpg", ".jpeg"}
+    ext = Path(nome).suffix.lower()
+
+    if ext not in ext_permitidas:
+        return False, "Tipo de arquivo inválido. Envie apenas PNG, JPG ou JPEG."
+
+    tamanho = len(arquivo.getvalue())
+    limite = MAX_UPLOAD_MB * 1024 * 1024
+    if tamanho > limite:
+        return (
+            False,
+            f"O arquivo {arquivo.name} excede o limite de {MAX_UPLOAD_MB} MB.",
+        )
+
+    return True, ""
+
+
+admin_config = obter_admin_config()
+admin_user = admin_config["user"]
+
 
 
 # ----------------------------
@@ -662,25 +818,18 @@ if not st.session_state.logado:
             usuario_digitado = usuario_input.strip()
             senha_digitada = senha_input.strip()
 
-            if usuario_digitado == admin_user and senha_digitada == admin_pass:
-                token = criar_sessao_login(admin_user, "Nova Solicitação")
+            if not usuario_digitado or not senha_digitada:
+                st.error("Informe usuário e senha.")
+            elif autenticar_admin(usuario_digitado, senha_digitada):
+                token = criar_sessao_login(usuario_digitado, "Nova Solicitação")
                 st.session_state.logado = True
-                st.session_state.usuario = admin_user
+                st.session_state.usuario = usuario_digitado
                 st.session_state.menu_atual = "Nova Solicitação"
                 st.session_state.token_sessao = token
                 persistir_query_params()
                 st.rerun()
             else:
-                cliente = conn.execute(
-                    """
-                    SELECT usuario
-                    FROM clientes
-                    WHERE usuario = %s
-                      AND senha = %s
-                      AND ativo = TRUE
-                    """,
-                    (usuario_digitado, senha_digitada),
-                ).fetchone()
+                cliente = autenticar_cliente(usuario_digitado, senha_digitada)
 
                 if cliente:
                     token = criar_sessao_login(usuario_digitado, "Nova Solicitação")
@@ -835,80 +984,90 @@ if menu == "Nova Solicitação":
         elif not arquivos or len(arquivos) == 0:
             st.error("É obrigatório enviar pelo menos uma imagem.")
         else:
-            duplicado = conn.execute(
-                """
-                SELECT id
-                FROM solicitacoes
-                WHERE cliente = %s
-                  AND titulo = %s
-                  AND descricao = %s
-                  AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
-                LIMIT 1
-                """,
-                (cliente_nome, titulo_limpo, descricao_limpa),
-            ).fetchone()
+            uploads_invalidos = []
+            for arquivo in arquivos:
+                ok, mensagem = validar_upload_imagem(arquivo)
+                if not ok:
+                    uploads_invalidos.append(mensagem)
 
-            if duplicado is not None:
-                st.warning(
-                    f"Esta solicitação já foi solicitada antes e ainda está em andamento. ID #{duplicado['id']}"
-                )
+            if uploads_invalidos:
+                for mensagem in uploads_invalidos:
+                    st.error(mensagem)
             else:
-                try:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            INSERT INTO solicitacoes
-                            (
-                                cliente,
-                                titulo,
-                                descricao,
-                                prioridade,
-                                status,
-                                complexidade,
-                                resposta,
-                                data_criacao
-                            )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            RETURNING id
-                            """,
-                            (
-                                cliente_nome,
-                                titulo_limpo,
-                                descricao_limpa,
-                                prioridade,
-                                "Em análise",
-                                complexidade,
-                                "",
-                                agora(),
-                            ),
-                        )
-                        solicitacao_id = cur.fetchone()["id"]
+                duplicado = conn.execute(
+                    """
+                    SELECT id
+                    FROM solicitacoes
+                    WHERE cliente = %s
+                      AND titulo = %s
+                      AND descricao = %s
+                      AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
+                    LIMIT 1
+                    """,
+                    (cliente_nome, titulo_limpo, descricao_limpa),
+                ).fetchone()
 
-                        for idx, arq in enumerate(arquivos):
+                if duplicado is not None:
+                    st.warning(
+                        f"Esta solicitação já foi solicitada antes e ainda está em andamento. ID #{duplicado['id']}"
+                    )
+                else:
+                    try:
+                        with conn.cursor() as cur:
                             cur.execute(
                                 """
-                                INSERT INTO anexos (solicitacao_id, nome_arquivo, observacao, imagem, data_criacao)
-                                VALUES (%s, %s, %s, %s, %s)
+                                INSERT INTO solicitacoes
+                                (
+                                    cliente,
+                                    titulo,
+                                    descricao,
+                                    prioridade,
+                                    status,
+                                    complexidade,
+                                    resposta,
+                                    data_criacao
+                                )
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                RETURNING id
                                 """,
                                 (
-                                    solicitacao_id,
-                                    arq.name,
-                                    (
-                                        observacoes_anexos[idx]
-                                        if idx < len(observacoes_anexos)
-                                        else ""
-                                    ),
-                                    arq.getvalue(),
+                                    cliente_nome,
+                                    titulo_limpo,
+                                    descricao_limpa,
+                                    prioridade,
+                                    "Em análise",
+                                    complexidade,
+                                    "",
                                     agora(),
                                 ),
                             )
+                            solicitacao_id = cur.fetchone()["id"]
 
-                    st.session_state.limpar_campos_nova_solicitacao = True
-                    st.success("Solicitação enviada com sucesso.")
-                    st.rerun()
+                            for idx, arq in enumerate(arquivos):
+                                cur.execute(
+                                    """
+                                    INSERT INTO anexos (solicitacao_id, nome_arquivo, observacao, imagem, data_criacao)
+                                    VALUES (%s, %s, %s, %s, %s)
+                                    """,
+                                    (
+                                        solicitacao_id,
+                                        arq.name,
+                                        (
+                                            observacoes_anexos[idx]
+                                            if idx < len(observacoes_anexos)
+                                            else ""
+                                        ),
+                                        arq.getvalue(),
+                                        agora(),
+                                    ),
+                                )
 
-                except psycopg.Error as e:
-                    st.error(f"Erro ao gravar solicitação: {e}")
+                        st.session_state.limpar_campos_nova_solicitacao = True
+                        st.success("Solicitação enviada com sucesso.")
+                        st.rerun()
+
+                    except psycopg.Error as e:
+                        st.error(f"Erro ao gravar solicitação: {e}")
 
 
 # ----------------------------
@@ -1329,7 +1488,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                         """,
                         (
                             usuario.strip(),
-                            senha.strip(),
+                            gerar_hash_senha(senha.strip()),
                             nome_completo.strip(),
                             ativo,
                             cpf.strip(),
@@ -1536,7 +1695,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                                 novo_usuario.strip(),
                                                 nova_funcao.strip(),
                                                 nova_empresa_id,
-                                                nova_senha.strip(),
+                                                gerar_hash_senha(nova_senha.strip()),
                                                 id_cli,
                                             ),
                                         )
