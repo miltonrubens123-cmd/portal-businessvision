@@ -25,47 +25,16 @@ def get_connection():
     if not database_url:
         raise RuntimeError("DATABASE_URL não configurado.")
 
-    return psycopg.connect(
-        database_url,
-        row_factory=dict_row,
-        autocommit=True,
-    )
-
-
-def get_conn():
-    """
-    Retorna uma conexão válida.
-    Se a conexão cacheada caiu ou expirou, limpa o cache e reconecta.
-    """
     try:
-        conn = get_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        return conn
-    except Exception:
-        get_connection.clear()
-        conn = get_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        return conn
-
-
-class SafeConnProxy:
-    def execute(self, *args, **kwargs):
-        return get_conn().execute(*args, **kwargs)
-
-    def cursor(self, *args, **kwargs):
-        return get_conn().cursor(*args, **kwargs)
-
-
-def run_query(sql, params=None, fetchone=False, fetchall=False):
-    with get_conn().cursor() as cur:
-        cur.execute(sql, params or ())
-        if fetchone:
-            return cur.fetchone()
-        if fetchall:
-            return cur.fetchall()
-        return None
+        return psycopg.connect(
+            database_url,
+            row_factory=dict_row,
+            autocommit=True,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Falha ao conectar no Postgres/Neon. Tipo: {type(e).__name__}. Detalhe: {e}"
+        )
 
 
 # ----------------------------
@@ -91,7 +60,7 @@ admin_user = "admin_business"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
-conn = SafeConnProxy()  # proxy com reconexão automática
+conn = get_connection()  # conexão cacheada entre reruns do Streamlit
 
 
 # ----------------------------
@@ -388,26 +357,11 @@ def nova_solicitacao():
     st.rerun()
 
 
-def normalizar_status(status):
-    mapa = {
-        "Pendente": "Em análise",
-        "Iniciado": "Em atendimento",
-        "Pausado": "Aguardando cliente",
-        "Resolvido": "Concluído",
-        "Em análise": "Em análise",
-        "Em atendimento": "Em atendimento",
-        "Aguardando cliente": "Aguardando cliente",
-        "Concluído": "Concluído",
-    }
-    return mapa.get(status, status)
-
-
 def formatar_status_texto(status):
-    status = normalizar_status(status)
     status_map = {
         "Em análise": "🔴 Em análise",
         "Em atendimento": "🟢 Em atendimento",
-        "Aguardando cliente": "🟡 Aguardando cliente",
+        "Atendimento pausado": "🟡 Atendimento pausado",
         "Concluído": "🔵 Concluído",
     }
     return status_map.get(status, status)
@@ -433,8 +387,6 @@ def obter_nome_cliente(usuario):
 
 
 def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
-    novo_status = normalizar_status(novo_status)
-
     atual = conn.execute(
         """
         SELECT inicio_atendimento, fim_atendimento
@@ -448,10 +400,10 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
     fim_atendimento = atual["fim_atendimento"] if atual else None
     agora_atendimento = agora()
 
-    if novo_status == "Em atendimento" and not inicio_atendimento:
+    if novo_status == "Iniciado" and not inicio_atendimento:
         inicio_atendimento = agora_atendimento
 
-    if novo_status == "Concluído":
+    if novo_status == "Resolvido":
         fim_atendimento = agora_atendimento
 
     conn.execute(
@@ -509,67 +461,6 @@ def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
                 key=f"{prefixo}_download_{anexo['id']}",
                 use_container_width=False,
             )
-
-
-def obter_solicitacoes_filtradas(cliente, status_filtro="Todos", prioridade_filtro="Todas", busca="", limite=50):
-    filtros = ["cliente = %s"]
-    params = [cliente]
-
-    if status_filtro != "Todos":
-        filtros.append(
-            """
-            CASE
-                WHEN status = 'Pendente' THEN 'Em análise'
-                WHEN status = 'Iniciado' THEN 'Em atendimento'
-                WHEN status = 'Pausado' THEN 'Aguardando cliente'
-                WHEN status = 'Resolvido' THEN 'Concluído'
-                ELSE status
-            END = %s
-            """
-        )
-        params.append(status_filtro)
-
-    if prioridade_filtro != "Todas":
-        filtros.append("COALESCE(prioridade, '') = %s")
-        params.append(prioridade_filtro)
-
-    busca = (busca or "").strip()
-    if busca:
-        if busca.isdigit():
-            filtros.append("(CAST(id AS TEXT) = %s OR titulo ILIKE %s)")
-            params.append(busca)
-            params.append(f"%{busca}%")
-        else:
-            filtros.append("titulo ILIKE %s")
-            params.append(f"%{busca}%")
-
-    sql = f"""
-        SELECT
-            id,
-            cliente,
-            titulo,
-            descricao,
-            prioridade,
-            status,
-            complexidade,
-            resposta,
-            data_criacao,
-            inicio_atendimento,
-            fim_atendimento
-        FROM solicitacoes
-        WHERE {' AND '.join(filtros)}
-        ORDER BY id DESC
-        LIMIT %s
-    """
-    params.append(limite)
-
-    rows = conn.execute(sql, params).fetchall()
-    dados = []
-    for row in rows:
-        item = dict(row)
-        item["status"] = normalizar_status(item.get("status"))
-        dados.append(item)
-    return dados
 
 
 def aplicar_estilo_login():
@@ -842,7 +733,7 @@ if menu == "Nova Solicitação":
                 WHERE cliente = %s
                   AND titulo = %s
                   AND descricao = %s
-                  AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
+                  AND status IN ('Em análise', 'Em atendimento', 'Atendimento pausado')
                 LIMIT 1
                 """,
                 (cliente_nome, titulo_limpo, descricao_limpa),
@@ -876,7 +767,7 @@ if menu == "Nova Solicitação":
                                 titulo_limpo,
                                 descricao_limpa,
                                 prioridade,
-                                "Em análise",
+                                "Pendente",
                                 complexidade,
                                 "",
                                 agora(),
@@ -930,34 +821,10 @@ elif menu == "Demandas Solicitadas":
             """
 🔴 Em análise  
 🟢 Em atendimento  
-🟡 Aguardando cliente  
+🟡 Atendimento pausado  
 🔵 Concluído
             """
         )
-
-    f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
-    with f1:
-        status_filtro = st.selectbox(
-            "Filtrar por status",
-            ["Todos", "Em análise", "Em atendimento", "Aguardando cliente", "Concluído"],
-            index=0,
-            key="filtro_status_demandas",
-        )
-    with f2:
-        prioridade_filtro = st.selectbox(
-            "Filtrar por prioridade",
-            ["Todas", "Alta", "Média", "Baixa"],
-            index=0,
-            key="filtro_prioridade_demandas",
-        )
-    with f3:
-        busca_filtro = st.text_input(
-            "Buscar por ID ou título",
-            placeholder="Ex.: 125 ou erro no relatório",
-            key="busca_demandas",
-        )
-
-    st.caption("Exibindo no máximo 50 registros por cliente para preservar performance.")
 
     if st.session_state.usuario == admin_user:
         clientes = [
@@ -969,25 +836,36 @@ elif menu == "Demandas Solicitadas":
     else:
         clientes = [st.session_state.usuario]
 
-    encontrou_resultado = False
-
     for cli in clientes:
-        dados_cli = obter_solicitacoes_filtradas(
-            cliente=cli,
-            status_filtro=status_filtro,
-            prioridade_filtro=prioridade_filtro,
-            busca=busca_filtro,
-            limite=50,
-        )
-
-        if not dados_cli:
-            continue
-
-        encontrou_resultado = True
         nome_exibicao = obter_nome_cliente(cli)
         st.subheader(f"Cliente: {nome_exibicao} ({cli})")
 
-        df_cli = pd.DataFrame(dados_cli)
+        dados_cli = conn.execute(
+            """
+            SELECT
+                id,
+                cliente,
+                titulo,
+                descricao,
+                prioridade,
+                status,
+                complexidade,
+                resposta,
+                data_criacao,
+                inicio_atendimento,
+                fim_atendimento
+            FROM solicitacoes
+            WHERE cliente = %s
+            ORDER BY id DESC
+            """,
+            (cli,),
+        ).fetchall()
+
+        if not dados_cli:
+            st.info("Nenhuma solicitação para este cliente.")
+            continue
+
+        df_cli = pd.DataFrame([dict(r) for r in dados_cli])
 
         if st.session_state.usuario != admin_user:
             df_exibicao = df_cli.copy()
@@ -1014,11 +892,11 @@ elif menu == "Demandas Solicitadas":
                     )
         else:
             for _, row in df_cli.iterrows():
-                status_atual = normalizar_status(row["status"])
+                status_atual = row["status"]
                 solicitacao_id = int(row["id"])
 
                 with st.container(border=True):
-                    c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.4, 1.5])
+                    c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.2, 1.6])
 
                     with c1:
                         st.write(f"**#{solicitacao_id}**")
@@ -1051,9 +929,9 @@ elif menu == "Demandas Solicitadas":
                         placeholder="Digite aqui a observação para o cliente...",
                     )
 
-                    ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1, 3.6])
+                    ac1, ac2, ac3, ac4 = st.columns([1, 1, 1, 4])
 
-                    if status_atual == "Em análise":
+                    if status_atual == "Pendente":
                         with ac1:
                             if st.button(
                                 "INICIAR",
@@ -1062,22 +940,20 @@ elif menu == "Demandas Solicitadas":
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Em atendimento",
+                                    "Iniciado",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
 
-                    elif status_atual == "Em atendimento":
+                    elif status_atual == "Iniciado":
                         with ac1:
                             if st.button(
-                                "AGUARDAR CLIENTE",
-                                key=f"aguardar_{solicitacao_id}",
+                                "PAUSAR",
+                                key=f"pausar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Aguardando cliente",
-                                    st.session_state[obs_key],
+                                    solicitacao_id, "Pausado", st.session_state[obs_key]
                                 )
                                 st.rerun()
                         with ac2:
@@ -1088,38 +964,38 @@ elif menu == "Demandas Solicitadas":
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Concluído",
+                                    "Resolvido",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
 
-                    elif status_atual == "Aguardando cliente":
+                    elif status_atual == "Pausado":
                         with ac1:
                             if st.button(
-                                "RETOMAR",
-                                key=f"retomar_{solicitacao_id}",
+                                "INICIAR",
+                                key=f"reiniciar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Em atendimento",
+                                    "Iniciado",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
                         with ac2:
                             if st.button(
                                 "FINALIZAR",
-                                key=f"finalizar_aguardando_{solicitacao_id}",
+                                key=f"finalizar_pausado_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Concluído",
+                                    "Resolvido",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
                     else:
-                        st.success("Demanda concluída.")
+                        st.success("Demanda finalizada.")
 
                     meta1, meta2, meta3 = st.columns(3)
                     with meta1:
@@ -1134,9 +1010,6 @@ elif menu == "Demandas Solicitadas":
                         st.caption(
                             f"Fim: {row['fim_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['fim_atendimento'] else ''}"
                         )
-
-    if not encontrou_resultado:
-        st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
 
 
 # ----------------------------
@@ -1187,13 +1060,10 @@ elif menu == "Dashboard" and st.session_state.usuario == admin_user:
         else pd.DataFrame(columns=colunas)
     )
 
-    if not df.empty:
-        df["Status"] = df["Status"].apply(normalizar_status)
-
     total = len(df)
-    finalizadas = len(df[df["Status"].apply(normalizar_status) == "Concluído"])
+    finalizadas = len(df[df["Status"] == "Resolvido"])
     pendentes_iniciadas = len(
-        df[df["Status"].isin(["Em análise", "Iniciado", "Pausado"])]
+        df[df["Status"].isin(["Pendente", "Iniciado", "Pausado"])]
     )
 
     col1, col2, col3 = st.columns(3)
