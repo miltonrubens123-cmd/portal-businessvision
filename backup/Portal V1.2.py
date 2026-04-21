@@ -25,17 +25,22 @@ def get_connection():
     if not database_url:
         raise RuntimeError("DATABASE_URL não configurado.")
 
-    return psycopg.connect(
-        database_url,
-        row_factory=dict_row,
-        autocommit=True,
-    )
+    try:
+        return psycopg.connect(
+            database_url,
+            row_factory=dict_row,
+            autocommit=True,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Falha ao conectar no Postgres/Neon. Tipo: {type(e).__name__}. Detalhe: {e}"
+        )
 
 
 def get_conn():
     """
-    Retorna uma conexão válida.
-    Se a conexão cacheada caiu ou expirou, limpa o cache e reconecta.
+    Retorna uma conexão válida com o Neon.
+    Se a conexão cacheada estiver fechada ou inválida, recria automaticamente.
     """
     try:
         conn = get_connection()
@@ -48,24 +53,6 @@ def get_conn():
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
         return conn
-
-
-class SafeConnProxy:
-    def execute(self, *args, **kwargs):
-        return get_conn().execute(*args, **kwargs)
-
-    def cursor(self, *args, **kwargs):
-        return get_conn().cursor(*args, **kwargs)
-
-
-def run_query(sql, params=None, fetchone=False, fetchall=False):
-    with get_conn().cursor() as cur:
-        cur.execute(sql, params or ())
-        if fetchone:
-            return cur.fetchone()
-        if fetchall:
-            return cur.fetchall()
-        return None
 
 
 # ----------------------------
@@ -91,7 +78,6 @@ admin_user = "admin_business"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
-conn = SafeConnProxy()  # proxy com reconexão automática
 
 
 # ----------------------------
@@ -134,7 +120,7 @@ def agora_str():
 # BANCO
 # ----------------------------
 def coluna_existe(nome_tabela, nome_coluna):
-    row = conn.execute(
+    row = get_conn().execute(
         """
         SELECT 1
         FROM information_schema.columns
@@ -149,7 +135,7 @@ def coluna_existe(nome_tabela, nome_coluna):
 
 
 def criar_tabelas():
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS empresas (
             id BIGSERIAL PRIMARY KEY,
@@ -166,7 +152,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS clientes (
             id BIGSERIAL PRIMARY KEY,
@@ -178,7 +164,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS solicitacoes (
             id BIGSERIAL PRIMARY KEY,
@@ -196,7 +182,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS anexos (
             id BIGSERIAL PRIMARY KEY,
@@ -209,7 +195,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS sessoes_login (
             token TEXT PRIMARY KEY,
@@ -221,18 +207,18 @@ def criar_tabelas():
     )
 
     if not coluna_existe("clientes", "cpf"):
-        conn.execute("ALTER TABLE clientes ADD COLUMN cpf TEXT")
+        get_conn().execute("ALTER TABLE clientes ADD COLUMN cpf TEXT")
 
     if not coluna_existe("clientes", "empresa_id"):
-        conn.execute(
+        get_conn().execute(
             "ALTER TABLE clientes ADD COLUMN empresa_id BIGINT REFERENCES empresas(id)"
         )
 
     if not coluna_existe("clientes", "funcao"):
-        conn.execute("ALTER TABLE clientes ADD COLUMN funcao TEXT")
+        get_conn().execute("ALTER TABLE clientes ADD COLUMN funcao TEXT")
 
     if not coluna_existe("empresas", "ativo"):
-        conn.execute("ALTER TABLE empresas ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
+        get_conn().execute("ALTER TABLE empresas ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
 
     for coluna in [
         "complexidade",
@@ -243,12 +229,12 @@ def criar_tabelas():
     ]:
         if not coluna_existe("solicitacoes", coluna):
             if coluna in ["data_criacao", "inicio_atendimento", "fim_atendimento"]:
-                conn.execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TIMESTAMP")
+                get_conn().execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TIMESTAMP")
             else:
-                conn.execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TEXT")
+                get_conn().execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TEXT")
 
     if not coluna_existe("sessoes_login", "menu"):
-        conn.execute("ALTER TABLE sessoes_login ADD COLUMN menu TEXT")
+        get_conn().execute("ALTER TABLE sessoes_login ADD COLUMN menu TEXT")
 
 
 # Executa bootstrap de schema apenas se explicitamente habilitado.
@@ -293,7 +279,7 @@ def gerar_usuario(nome):
 
 def criar_sessao_login(usuario, menu="Nova Solicitação"):
     token = str(uuid.uuid4())
-    conn.execute(
+    get_conn().execute(
         """
         INSERT INTO sessoes_login (token, usuario, menu, data_criacao)
         VALUES (%s, %s, %s, %s)
@@ -311,7 +297,7 @@ def criar_sessao_login(usuario, menu="Nova Solicitação"):
 def atualizar_menu_sessao(token, menu):
     if not token:
         return
-    conn.execute(
+    get_conn().execute(
         "UPDATE sessoes_login SET menu = %s WHERE token = %s",
         (menu, token),
     )
@@ -320,7 +306,7 @@ def atualizar_menu_sessao(token, menu):
 def obter_sessao(token):
     if not token:
         return None
-    return conn.execute(
+    return get_conn().execute(
         "SELECT token, usuario, menu, data_criacao FROM sessoes_login WHERE token = %s",
         (token,),
     ).fetchone()
@@ -329,7 +315,7 @@ def obter_sessao(token):
 def excluir_sessao(token):
     if not token:
         return
-    conn.execute("DELETE FROM sessoes_login WHERE token = %s", (token,))
+    get_conn().execute("DELETE FROM sessoes_login WHERE token = %s", (token,))
 
 
 def restaurar_login():
@@ -342,7 +328,7 @@ def restaurar_login():
 
     usuario = sessao["usuario"]
     if usuario != admin_user:
-        cliente = conn.execute(
+        cliente = get_conn().execute(
             "SELECT usuario FROM clientes WHERE usuario = %s AND ativo = TRUE",
             (usuario,),
         ).fetchone()
@@ -388,33 +374,18 @@ def nova_solicitacao():
     st.rerun()
 
 
-def normalizar_status(status):
-    mapa = {
-        "Pendente": "Em análise",
-        "Iniciado": "Em atendimento",
-        "Pausado": "Aguardando cliente",
-        "Resolvido": "Concluído",
-        "Em análise": "Em análise",
-        "Em atendimento": "Em atendimento",
-        "Aguardando cliente": "Aguardando cliente",
-        "Concluído": "Concluído",
-    }
-    return mapa.get(status, status)
-
-
 def formatar_status_texto(status):
-    status = normalizar_status(status)
     status_map = {
         "Em análise": "🔴 Em análise",
         "Em atendimento": "🟢 Em atendimento",
-        "Aguardando cliente": "🟡 Aguardando cliente",
+        "Atendimento pausado": "🟡 Atendimento pausado",
         "Concluído": "🔵 Concluído",
     }
     return status_map.get(status, status)
 
 
 def obter_clientes_ativos():
-    return conn.execute(
+    return get_conn().execute(
         """
         SELECT usuario, nome
         FROM clientes
@@ -425,7 +396,7 @@ def obter_clientes_ativos():
 
 
 def obter_nome_cliente(usuario):
-    row = conn.execute(
+    row = get_conn().execute(
         "SELECT nome FROM clientes WHERE usuario = %s",
         (usuario,),
     ).fetchone()
@@ -433,9 +404,7 @@ def obter_nome_cliente(usuario):
 
 
 def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
-    novo_status = normalizar_status(novo_status)
-
-    atual = conn.execute(
+    atual = get_conn().execute(
         """
         SELECT inicio_atendimento, fim_atendimento
         FROM solicitacoes
@@ -448,13 +417,13 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
     fim_atendimento = atual["fim_atendimento"] if atual else None
     agora_atendimento = agora()
 
-    if novo_status == "Em atendimento" and not inicio_atendimento:
+    if novo_status == "Iniciado" and not inicio_atendimento:
         inicio_atendimento = agora_atendimento
 
-    if novo_status == "Concluído":
+    if novo_status == "Resolvido":
         fim_atendimento = agora_atendimento
 
-    conn.execute(
+    get_conn().execute(
         """
         UPDATE solicitacoes
         SET status = %s,
@@ -474,7 +443,7 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
 
 
 def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
-    anexos = conn.execute(
+    anexos = get_conn().execute(
         """
         SELECT id, nome_arquivo, observacao, imagem
         FROM anexos
@@ -509,67 +478,6 @@ def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
                 key=f"{prefixo}_download_{anexo['id']}",
                 use_container_width=False,
             )
-
-
-def obter_solicitacoes_filtradas(cliente, status_filtro="Todos", prioridade_filtro="Todas", busca="", limite=50):
-    filtros = ["cliente = %s"]
-    params = [cliente]
-
-    if status_filtro != "Todos":
-        filtros.append(
-            """
-            CASE
-                WHEN status = 'Pendente' THEN 'Em análise'
-                WHEN status = 'Iniciado' THEN 'Em atendimento'
-                WHEN status = 'Pausado' THEN 'Aguardando cliente'
-                WHEN status = 'Resolvido' THEN 'Concluído'
-                ELSE status
-            END = %s
-            """
-        )
-        params.append(status_filtro)
-
-    if prioridade_filtro != "Todas":
-        filtros.append("COALESCE(prioridade, '') = %s")
-        params.append(prioridade_filtro)
-
-    busca = (busca or "").strip()
-    if busca:
-        if busca.isdigit():
-            filtros.append("(CAST(id AS TEXT) = %s OR titulo ILIKE %s)")
-            params.append(busca)
-            params.append(f"%{busca}%")
-        else:
-            filtros.append("titulo ILIKE %s")
-            params.append(f"%{busca}%")
-
-    sql = f"""
-        SELECT
-            id,
-            cliente,
-            titulo,
-            descricao,
-            prioridade,
-            status,
-            complexidade,
-            resposta,
-            data_criacao,
-            inicio_atendimento,
-            fim_atendimento
-        FROM solicitacoes
-        WHERE {' AND '.join(filtros)}
-        ORDER BY id DESC
-        LIMIT %s
-    """
-    params.append(limite)
-
-    rows = conn.execute(sql, params).fetchall()
-    dados = []
-    for row in rows:
-        item = dict(row)
-        item["status"] = normalizar_status(item.get("status"))
-        dados.append(item)
-    return dados
 
 
 def aplicar_estilo_login():
@@ -671,7 +579,7 @@ if not st.session_state.logado:
                 persistir_query_params()
                 st.rerun()
             else:
-                cliente = conn.execute(
+                cliente = get_conn().execute(
                     """
                     SELECT usuario
                     FROM clientes
@@ -835,14 +743,14 @@ if menu == "Nova Solicitação":
         elif not arquivos or len(arquivos) == 0:
             st.error("É obrigatório enviar pelo menos uma imagem.")
         else:
-            duplicado = conn.execute(
+            duplicado = get_conn().execute(
                 """
                 SELECT id
                 FROM solicitacoes
                 WHERE cliente = %s
                   AND titulo = %s
                   AND descricao = %s
-                  AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
+                  AND status IN ('Em análise', 'Em atendimento', 'Atendimento pausado')
                 LIMIT 1
                 """,
                 (cliente_nome, titulo_limpo, descricao_limpa),
@@ -854,6 +762,7 @@ if menu == "Nova Solicitação":
                 )
             else:
                 try:
+                    conn = get_conn()
                     with conn.cursor() as cur:
                         cur.execute(
                             """
@@ -876,7 +785,7 @@ if menu == "Nova Solicitação":
                                 titulo_limpo,
                                 descricao_limpa,
                                 prioridade,
-                                "Em análise",
+                                "Pendente",
                                 complexidade,
                                 "",
                                 agora(),
@@ -930,64 +839,51 @@ elif menu == "Demandas Solicitadas":
             """
 🔴 Em análise  
 🟢 Em atendimento  
-🟡 Aguardando cliente  
+🟡 Atendimento pausado  
 🔵 Concluído
             """
         )
 
-    f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
-    with f1:
-        status_filtro = st.selectbox(
-            "Filtrar por status",
-            ["Todos", "Em análise", "Em atendimento", "Aguardando cliente", "Concluído"],
-            index=0,
-            key="filtro_status_demandas",
-        )
-    with f2:
-        prioridade_filtro = st.selectbox(
-            "Filtrar por prioridade",
-            ["Todas", "Alta", "Média", "Baixa"],
-            index=0,
-            key="filtro_prioridade_demandas",
-        )
-    with f3:
-        busca_filtro = st.text_input(
-            "Buscar por ID ou título",
-            placeholder="Ex.: 125 ou erro no relatório",
-            key="busca_demandas",
-        )
-
-    st.caption("Exibindo no máximo 50 registros por cliente para preservar performance.")
-
     if st.session_state.usuario == admin_user:
         clientes = [
             row["usuario"]
-            for row in conn.execute(
+            for row in get_conn().execute(
                 "SELECT usuario FROM clientes WHERE ativo = TRUE ORDER BY nome, usuario"
             ).fetchall()
         ]
     else:
         clientes = [st.session_state.usuario]
 
-    encontrou_resultado = False
-
     for cli in clientes:
-        dados_cli = obter_solicitacoes_filtradas(
-            cliente=cli,
-            status_filtro=status_filtro,
-            prioridade_filtro=prioridade_filtro,
-            busca=busca_filtro,
-            limite=50,
-        )
-
-        if not dados_cli:
-            continue
-
-        encontrou_resultado = True
         nome_exibicao = obter_nome_cliente(cli)
         st.subheader(f"Cliente: {nome_exibicao} ({cli})")
 
-        df_cli = pd.DataFrame(dados_cli)
+        dados_cli = get_conn().execute(
+            """
+            SELECT
+                id,
+                cliente,
+                titulo,
+                descricao,
+                prioridade,
+                status,
+                complexidade,
+                resposta,
+                data_criacao,
+                inicio_atendimento,
+                fim_atendimento
+            FROM solicitacoes
+            WHERE cliente = %s
+            ORDER BY id DESC
+            """,
+            (cli,),
+        ).fetchall()
+
+        if not dados_cli:
+            st.info("Nenhuma solicitação para este cliente.")
+            continue
+
+        df_cli = pd.DataFrame([dict(r) for r in dados_cli])
 
         if st.session_state.usuario != admin_user:
             df_exibicao = df_cli.copy()
@@ -1014,11 +910,11 @@ elif menu == "Demandas Solicitadas":
                     )
         else:
             for _, row in df_cli.iterrows():
-                status_atual = normalizar_status(row["status"])
+                status_atual = row["status"]
                 solicitacao_id = int(row["id"])
 
                 with st.container(border=True):
-                    c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.4, 1.5])
+                    c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.2, 1.6])
 
                     with c1:
                         st.write(f"**#{solicitacao_id}**")
@@ -1051,9 +947,9 @@ elif menu == "Demandas Solicitadas":
                         placeholder="Digite aqui a observação para o cliente...",
                     )
 
-                    ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1, 3.6])
+                    ac1, ac2, ac3, ac4 = st.columns([1, 1, 1, 4])
 
-                    if status_atual == "Em análise":
+                    if status_atual == "Pendente":
                         with ac1:
                             if st.button(
                                 "INICIAR",
@@ -1062,22 +958,20 @@ elif menu == "Demandas Solicitadas":
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Em atendimento",
+                                    "Iniciado",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
 
-                    elif status_atual == "Em atendimento":
+                    elif status_atual == "Iniciado":
                         with ac1:
                             if st.button(
-                                "AGUARDAR CLIENTE",
-                                key=f"aguardar_{solicitacao_id}",
+                                "PAUSAR",
+                                key=f"pausar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Aguardando cliente",
-                                    st.session_state[obs_key],
+                                    solicitacao_id, "Pausado", st.session_state[obs_key]
                                 )
                                 st.rerun()
                         with ac2:
@@ -1088,38 +982,38 @@ elif menu == "Demandas Solicitadas":
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Concluído",
+                                    "Resolvido",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
 
-                    elif status_atual == "Aguardando cliente":
+                    elif status_atual == "Pausado":
                         with ac1:
                             if st.button(
-                                "RETOMAR",
-                                key=f"retomar_{solicitacao_id}",
+                                "INICIAR",
+                                key=f"reiniciar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Em atendimento",
+                                    "Iniciado",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
                         with ac2:
                             if st.button(
                                 "FINALIZAR",
-                                key=f"finalizar_aguardando_{solicitacao_id}",
+                                key=f"finalizar_pausado_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
-                                    "Concluído",
+                                    "Resolvido",
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
                     else:
-                        st.success("Demanda concluída.")
+                        st.success("Demanda finalizada.")
 
                     meta1, meta2, meta3 = st.columns(3)
                     with meta1:
@@ -1135,9 +1029,6 @@ elif menu == "Demandas Solicitadas":
                             f"Fim: {row['fim_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['fim_atendimento'] else ''}"
                         )
 
-    if not encontrou_resultado:
-        st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
-
 
 # ----------------------------
 # DASHBOARD
@@ -1150,7 +1041,7 @@ elif menu == "Dashboard" and st.session_state.usuario == admin_user:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    dados = conn.execute(
+    dados = get_conn().execute(
         """
         SELECT
             id,
@@ -1187,13 +1078,10 @@ elif menu == "Dashboard" and st.session_state.usuario == admin_user:
         else pd.DataFrame(columns=colunas)
     )
 
-    if not df.empty:
-        df["Status"] = df["Status"].apply(normalizar_status)
-
     total = len(df)
-    finalizadas = len(df[df["Status"].apply(normalizar_status) == "Concluído"])
+    finalizadas = len(df[df["Status"] == "Resolvido"])
     pendentes_iniciadas = len(
-        df[df["Status"].isin(["Em análise", "Iniciado", "Pausado"])]
+        df[df["Status"].isin(["Pendente", "Iniciado", "Pausado"])]
     )
 
     col1, col2, col3 = st.columns(3)
@@ -1260,7 +1148,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
             if not fantasia.strip() or not razao_social.strip():
                 st.error("Preencha pelo menos Razão Social e Nome Fantasia.")
             else:
-                conn.execute(
+                get_conn().execute(
                     """
                     INSERT INTO empresas
                     (cnpj, razao_social, fantasia, cep, logradouro, numero, bairro, cidade, ativo)
@@ -1284,7 +1172,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
         nome_completo = st.text_input("Nome completo")
         cpf = st.text_input("CPF")
 
-        empresas = conn.execute(
+        empresas = get_conn().execute(
             "SELECT id, fantasia FROM empresas WHERE ativo = TRUE ORDER BY fantasia"
         ).fetchall()
 
@@ -1314,7 +1202,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
             ):
                 st.error("Preencha os campos obrigatórios.")
             else:
-                existe = conn.execute(
+                existe = get_conn().execute(
                     "SELECT 1 FROM clientes WHERE usuario = %s",
                     (usuario.strip(),),
                 ).fetchone()
@@ -1322,7 +1210,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                 if existe:
                     st.error("Usuário já existe. Informe outro usuário.")
                 else:
-                    conn.execute(
+                    get_conn().execute(
                         """
                         INSERT INTO clientes (usuario, senha, nome, ativo, cpf, empresa_id, funcao)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -1346,7 +1234,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
     if "cliente_editando_id" not in st.session_state:
         st.session_state.cliente_editando_id = None
 
-    clientes = conn.execute(
+    clientes = get_conn().execute(
         """
         SELECT
             c.id,
@@ -1363,7 +1251,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
         """
     ).fetchall()
 
-    empresas_ativas = conn.execute(
+    empresas_ativas = get_conn().execute(
         "SELECT id, fantasia FROM empresas WHERE ativo = TRUE ORDER BY fantasia"
     ).fetchall()
     mapa_empresas_id_nome = {row["id"]: row["fantasia"] for row in empresas_ativas}
@@ -1399,7 +1287,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                 key=f"inativar_{id_cli}",
                                 use_container_width=True,
                             ):
-                                conn.execute(
+                                get_conn().execute(
                                     "UPDATE clientes SET ativo = FALSE WHERE id = %s",
                                     (id_cli,),
                                 )
@@ -1410,7 +1298,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                 key=f"ativar_{id_cli}",
                                 use_container_width=True,
                             ):
-                                conn.execute(
+                                get_conn().execute(
                                     "UPDATE clientes SET ativo = TRUE WHERE id = %s",
                                     (id_cli,),
                                 )
@@ -1420,7 +1308,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                         if st.button(
                             "Excluir", key=f"excluir_{id_cli}", use_container_width=True
                         ):
-                            tem_solicitacao = conn.execute(
+                            tem_solicitacao = get_conn().execute(
                                 "SELECT 1 FROM solicitacoes WHERE cliente = %s LIMIT 1",
                                 (cli["usuario"],),
                             ).fetchone()
@@ -1430,7 +1318,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                     f"O cliente {cli['usuario']} possui solicitações. Inative ao invés de excluir."
                                 )
                             else:
-                                conn.execute(
+                                get_conn().execute(
                                     "DELETE FROM clientes WHERE id = %s",
                                     (id_cli,),
                                 )
@@ -1513,7 +1401,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                             ):
                                 st.error("Preencha nome, CPF e usuário.")
                             else:
-                                usuario_existente = conn.execute(
+                                usuario_existente = get_conn().execute(
                                     "SELECT 1 FROM clientes WHERE usuario = %s AND id <> %s",
                                     (novo_usuario.strip(), id_cli),
                                 ).fetchone()
@@ -1524,7 +1412,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                     )
                                 else:
                                     if nova_senha.strip():
-                                        conn.execute(
+                                        get_conn().execute(
                                             """
                                             UPDATE clientes
                                             SET nome = %s, cpf = %s, usuario = %s, funcao = %s, empresa_id = %s, senha = %s
@@ -1541,7 +1429,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                             ),
                                         )
                                     else:
-                                        conn.execute(
+                                        get_conn().execute(
                                             """
                                             UPDATE clientes
                                             SET nome = %s, cpf = %s, usuario = %s, funcao = %s, empresa_id = %s
@@ -1557,7 +1445,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                             ),
                                         )
 
-                                    conn.execute(
+                                    get_conn().execute(
                                         "UPDATE solicitacoes SET cliente = %s WHERE cliente = %s",
                                         (novo_usuario.strip(), cli["usuario"]),
                                     )
