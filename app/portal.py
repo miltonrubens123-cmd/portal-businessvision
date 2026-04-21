@@ -15,6 +15,28 @@ from psycopg.rows import dict_row
 
 @st.cache_resource
 def get_connection():
+def get_conn():
+    try:
+        c = get_connection()
+        with c.cursor() as cur:
+            cur.execute("SELECT 1")
+        return c
+    except Exception:
+        get_connection.clear()
+        c = get_connection()
+        with c.cursor() as cur:
+            cur.execute("SELECT 1")
+        return c
+
+
+class ConnProxy:
+    def execute(self, *args, **kwargs):
+        conn = get_conn()
+        return conn.execute(*args, **kwargs)
+
+    def cursor(self):
+        return get_conn().cursor()
+
     database_url = None
 
     if "database" in st.secrets and "url" in st.secrets["database"]:
@@ -60,7 +82,7 @@ admin_user = "admin_business"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
-conn = get_connection()  # conexão cacheada entre reruns do Streamlit
+conn = ConnProxy()  # conexão cacheada entre reruns do Streamlit
 
 
 # ----------------------------
