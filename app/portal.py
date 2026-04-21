@@ -1,9 +1,5 @@
-# VERSÃO AJUSTADA PARA POSTGRES (NEON)
-# Principais ajustes:
-# - Removido SQLite (PRAGMA / AUTOINCREMENT / ?)
-# - Substituído por psycopg (%s)
-# - INSERT ON CONFLICT
-# - RETURNING id
+# PORTAL BUSINESS VISION - VERSÃO COMPLETA AJUSTADA PARA POSTGRES (NEON)
+# Conversão completa do SQLite para PostgreSQL
 
 import os
 import base64
@@ -31,7 +27,10 @@ def get_connection():
     if not database_url:
         raise RuntimeError("DATABASE_URL não configurado.")
 
-    return psycopg.connect(database_url, row_factory=dict_row, autocommit=True)
+    try:
+        return psycopg.connect(database_url, row_factory=dict_row, autocommit=True)
+    except Exception as e:
+        raise RuntimeError(f"Erro ao conectar no banco: {e}")
 
 conn = get_connection()
 
@@ -48,14 +47,15 @@ APP_TZ = ZoneInfo("America/Santarem")
 # ----------------------------
 # UTIL
 # ----------------------------
-def agora_str():
+def agora():
     return datetime.now(APP_TZ)
 
 # ----------------------------
-# SESSÃO
+# SESSÃO LOGIN
 # ----------------------------
 def criar_sessao_login(usuario, menu="Nova Solicitação"):
     token = str(uuid.uuid4())
+
     conn.execute(
         """
         INSERT INTO sessoes_login (token, usuario, menu, data_criacao)
@@ -65,8 +65,9 @@ def criar_sessao_login(usuario, menu="Nova Solicitação"):
                       menu = EXCLUDED.menu,
                       data_criacao = EXCLUDED.data_criacao
         """,
-        (token, usuario, menu, agora_str()),
+        (token, usuario, menu, agora()),
     )
+
     return token
 
 # ----------------------------
@@ -76,6 +77,8 @@ if "logado" not in st.session_state:
     st.session_state.logado = False
 
 if not st.session_state.logado:
+    st.title("Portal Business Vision")
+
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
@@ -83,63 +86,93 @@ if not st.session_state.logado:
         if usuario == admin_user and senha == admin_pass:
             st.session_state.logado = True
             st.session_state.usuario = usuario
+            criar_sessao_login(usuario)
+            st.rerun()
+
+        row = conn.execute(
+            """
+            SELECT usuario
+            FROM clientes
+            WHERE usuario = %s AND senha = %s AND ativo = TRUE
+            """,
+            (usuario, senha),
+        ).fetchone()
+
+        if row:
+            st.session_state.logado = True
+            st.session_state.usuario = usuario
+            criar_sessao_login(usuario)
             st.rerun()
         else:
-            row = conn.execute(
-                "SELECT usuario FROM clientes WHERE usuario = %s AND senha = %s AND ativo = TRUE",
-                (usuario, senha),
-            ).fetchone()
-
-            if row:
-                st.session_state.logado = True
-                st.session_state.usuario = usuario
-                st.rerun()
-            else:
-                st.error("Login inválido")
+            st.error("Usuário ou senha inválidos")
 
     st.stop()
 
 # ----------------------------
+# MENU
+# ----------------------------
+menu = st.sidebar.selectbox("Menu", ["Nova Solicitação", "Demandas"])
+
+# ----------------------------
 # NOVA SOLICITAÇÃO
 # ----------------------------
-st.header("Nova Solicitação")
+if menu == "Nova Solicitação":
+    st.header("Nova Solicitação")
 
-titulo = st.text_input("Título")
-descricao = st.text_area("Descrição")
+    titulo = st.text_input("Título")
+    descricao = st.text_area("Descrição")
+    prioridade = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"])
 
-if st.button("Enviar"):
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO solicitacoes (cliente, titulo, descricao, prioridade, status, data_criacao)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                st.session_state.usuario,
-                titulo,
-                descricao,
-                "Média",
-                "Pendente",
-                agora_str(),
-            ),
-        )
-        solicitacao_id = cur.fetchone()["id"]
+    if st.button("Enviar"):
+        if not titulo or not descricao:
+            st.warning("Preencha os campos")
+        else:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO solicitacoes (
+                        cliente,
+                        titulo,
+                        descricao,
+                        prioridade,
+                        status,
+                        data_criacao
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        st.session_state.usuario,
+                        titulo,
+                        descricao,
+                        prioridade,
+                        "Pendente",
+                        agora(),
+                    ),
+                )
 
-    st.success(f"Solicitação criada #{solicitacao_id}")
+                solicitacao_id = cur.fetchone()["id"]
+
+            st.success(f"Solicitação enviada #{solicitacao_id}")
 
 # ----------------------------
 # LISTAGEM
 # ----------------------------
-st.header("Minhas Solicitações")
+elif menu == "Demandas":
+    st.header("Demandas")
 
-dados = conn.execute(
-    "SELECT * FROM solicitacoes WHERE cliente = %s ORDER BY id DESC",
-    (st.session_state.usuario,),
-).fetchall()
+    dados = conn.execute(
+        """
+        SELECT id, titulo, prioridade, status, data_criacao
+        FROM solicitacoes
+        WHERE cliente = %s
+        ORDER BY id DESC
+        """,
+        (st.session_state.usuario,),
+    ).fetchall()
 
-if dados:
-    df = pd.DataFrame(dados)
-    st.dataframe(df)
-else:
-    st.info("Nenhuma solicitação")
+    if dados:
+        df = pd.DataFrame(dados)
+        st.dataframe(df)
+    else:
+        st.info("Nenhuma solicitação encontrada")
