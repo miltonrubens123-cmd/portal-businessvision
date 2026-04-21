@@ -38,27 +38,21 @@ def get_connection():
 
 
 def get_conn():
+    """
+    Retorna uma conexão válida com o Neon.
+    Se a conexão cacheada estiver fechada ou inválida, recria automaticamente.
+    """
     try:
-        c = get_connection()
-        with c.cursor() as cur:
+        conn = get_connection()
+        with conn.cursor() as cur:
             cur.execute("SELECT 1")
-        return c
+        return conn
     except Exception:
         get_connection.clear()
-        c = get_connection()
-        with c.cursor() as cur:
+        conn = get_connection()
+        with conn.cursor() as cur:
             cur.execute("SELECT 1")
-        return c
-
-
-class ConnProxy:
-    def execute(self, *args, **kwargs):
-        c = get_conn()
-        return c.execute(*args, **kwargs)
-
-    def cursor(self):
-        c = get_conn()
-        return c.cursor()
+        return conn
 
 
 # ----------------------------
@@ -84,7 +78,6 @@ admin_user = "admin_business"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
-conn = ConnProxy()  # conexão cacheada entre reruns do Streamlit
 
 
 # ----------------------------
@@ -127,7 +120,7 @@ def agora_str():
 # BANCO
 # ----------------------------
 def coluna_existe(nome_tabela, nome_coluna):
-    row = conn.execute(
+    row = get_conn().execute(
         """
         SELECT 1
         FROM information_schema.columns
@@ -142,7 +135,7 @@ def coluna_existe(nome_tabela, nome_coluna):
 
 
 def criar_tabelas():
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS empresas (
             id BIGSERIAL PRIMARY KEY,
@@ -159,7 +152,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS clientes (
             id BIGSERIAL PRIMARY KEY,
@@ -171,7 +164,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS solicitacoes (
             id BIGSERIAL PRIMARY KEY,
@@ -189,7 +182,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS anexos (
             id BIGSERIAL PRIMARY KEY,
@@ -202,7 +195,7 @@ def criar_tabelas():
         """
     )
 
-    conn.execute(
+    get_conn().execute(
         """
         CREATE TABLE IF NOT EXISTS sessoes_login (
             token TEXT PRIMARY KEY,
@@ -214,18 +207,18 @@ def criar_tabelas():
     )
 
     if not coluna_existe("clientes", "cpf"):
-        conn.execute("ALTER TABLE clientes ADD COLUMN cpf TEXT")
+        get_conn().execute("ALTER TABLE clientes ADD COLUMN cpf TEXT")
 
     if not coluna_existe("clientes", "empresa_id"):
-        conn.execute(
+        get_conn().execute(
             "ALTER TABLE clientes ADD COLUMN empresa_id BIGINT REFERENCES empresas(id)"
         )
 
     if not coluna_existe("clientes", "funcao"):
-        conn.execute("ALTER TABLE clientes ADD COLUMN funcao TEXT")
+        get_conn().execute("ALTER TABLE clientes ADD COLUMN funcao TEXT")
 
     if not coluna_existe("empresas", "ativo"):
-        conn.execute("ALTER TABLE empresas ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
+        get_conn().execute("ALTER TABLE empresas ADD COLUMN ativo BOOLEAN DEFAULT TRUE")
 
     for coluna in [
         "complexidade",
@@ -236,12 +229,12 @@ def criar_tabelas():
     ]:
         if not coluna_existe("solicitacoes", coluna):
             if coluna in ["data_criacao", "inicio_atendimento", "fim_atendimento"]:
-                conn.execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TIMESTAMP")
+                get_conn().execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TIMESTAMP")
             else:
-                conn.execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TEXT")
+                get_conn().execute(f"ALTER TABLE solicitacoes ADD COLUMN {coluna} TEXT")
 
     if not coluna_existe("sessoes_login", "menu"):
-        conn.execute("ALTER TABLE sessoes_login ADD COLUMN menu TEXT")
+        get_conn().execute("ALTER TABLE sessoes_login ADD COLUMN menu TEXT")
 
 
 # Executa bootstrap de schema apenas se explicitamente habilitado.
@@ -286,7 +279,7 @@ def gerar_usuario(nome):
 
 def criar_sessao_login(usuario, menu="Nova Solicitação"):
     token = str(uuid.uuid4())
-    conn.execute(
+    get_conn().execute(
         """
         INSERT INTO sessoes_login (token, usuario, menu, data_criacao)
         VALUES (%s, %s, %s, %s)
@@ -304,7 +297,7 @@ def criar_sessao_login(usuario, menu="Nova Solicitação"):
 def atualizar_menu_sessao(token, menu):
     if not token:
         return
-    conn.execute(
+    get_conn().execute(
         "UPDATE sessoes_login SET menu = %s WHERE token = %s",
         (menu, token),
     )
@@ -313,7 +306,7 @@ def atualizar_menu_sessao(token, menu):
 def obter_sessao(token):
     if not token:
         return None
-    return conn.execute(
+    return get_conn().execute(
         "SELECT token, usuario, menu, data_criacao FROM sessoes_login WHERE token = %s",
         (token,),
     ).fetchone()
@@ -322,7 +315,7 @@ def obter_sessao(token):
 def excluir_sessao(token):
     if not token:
         return
-    conn.execute("DELETE FROM sessoes_login WHERE token = %s", (token,))
+    get_conn().execute("DELETE FROM sessoes_login WHERE token = %s", (token,))
 
 
 def restaurar_login():
@@ -335,7 +328,7 @@ def restaurar_login():
 
     usuario = sessao["usuario"]
     if usuario != admin_user:
-        cliente = conn.execute(
+        cliente = get_conn().execute(
             "SELECT usuario FROM clientes WHERE usuario = %s AND ativo = TRUE",
             (usuario,),
         ).fetchone()
@@ -392,7 +385,7 @@ def formatar_status_texto(status):
 
 
 def obter_clientes_ativos():
-    return conn.execute(
+    return get_conn().execute(
         """
         SELECT usuario, nome
         FROM clientes
@@ -403,7 +396,7 @@ def obter_clientes_ativos():
 
 
 def obter_nome_cliente(usuario):
-    row = conn.execute(
+    row = get_conn().execute(
         "SELECT nome FROM clientes WHERE usuario = %s",
         (usuario,),
     ).fetchone()
@@ -411,7 +404,7 @@ def obter_nome_cliente(usuario):
 
 
 def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
-    atual = conn.execute(
+    atual = get_conn().execute(
         """
         SELECT inicio_atendimento, fim_atendimento
         FROM solicitacoes
@@ -430,7 +423,7 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
     if novo_status == "Resolvido":
         fim_atendimento = agora_atendimento
 
-    conn.execute(
+    get_conn().execute(
         """
         UPDATE solicitacoes
         SET status = %s,
@@ -450,7 +443,7 @@ def atualizar_solicitacao(solicitacao_id, novo_status, observacao):
 
 
 def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
-    anexos = conn.execute(
+    anexos = get_conn().execute(
         """
         SELECT id, nome_arquivo, observacao, imagem
         FROM anexos
@@ -586,7 +579,7 @@ if not st.session_state.logado:
                 persistir_query_params()
                 st.rerun()
             else:
-                cliente = conn.execute(
+                cliente = get_conn().execute(
                     """
                     SELECT usuario
                     FROM clientes
@@ -750,7 +743,7 @@ if menu == "Nova Solicitação":
         elif not arquivos or len(arquivos) == 0:
             st.error("É obrigatório enviar pelo menos uma imagem.")
         else:
-            duplicado = conn.execute(
+            duplicado = get_conn().execute(
                 """
                 SELECT id
                 FROM solicitacoes
@@ -769,6 +762,7 @@ if menu == "Nova Solicitação":
                 )
             else:
                 try:
+                    conn = get_conn()
                     with conn.cursor() as cur:
                         cur.execute(
                             """
@@ -853,7 +847,7 @@ elif menu == "Demandas Solicitadas":
     if st.session_state.usuario == admin_user:
         clientes = [
             row["usuario"]
-            for row in conn.execute(
+            for row in get_conn().execute(
                 "SELECT usuario FROM clientes WHERE ativo = TRUE ORDER BY nome, usuario"
             ).fetchall()
         ]
@@ -864,7 +858,7 @@ elif menu == "Demandas Solicitadas":
         nome_exibicao = obter_nome_cliente(cli)
         st.subheader(f"Cliente: {nome_exibicao} ({cli})")
 
-        dados_cli = conn.execute(
+        dados_cli = get_conn().execute(
             """
             SELECT
                 id,
@@ -911,7 +905,9 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
-                    render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
+                    render_anexos_como_arquivo(
+                        anexo_id, prefixo=f"cliente_{anexo_id}"
+                    )
         else:
             for _, row in df_cli.iterrows():
                 status_atual = row["status"]
@@ -1045,7 +1041,7 @@ elif menu == "Dashboard" and st.session_state.usuario == admin_user:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    dados = conn.execute(
+    dados = get_conn().execute(
         """
         SELECT
             id,
@@ -1152,7 +1148,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
             if not fantasia.strip() or not razao_social.strip():
                 st.error("Preencha pelo menos Razão Social e Nome Fantasia.")
             else:
-                conn.execute(
+                get_conn().execute(
                     """
                     INSERT INTO empresas
                     (cnpj, razao_social, fantasia, cep, logradouro, numero, bairro, cidade, ativo)
@@ -1176,7 +1172,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
         nome_completo = st.text_input("Nome completo")
         cpf = st.text_input("CPF")
 
-        empresas = conn.execute(
+        empresas = get_conn().execute(
             "SELECT id, fantasia FROM empresas WHERE ativo = TRUE ORDER BY fantasia"
         ).fetchall()
 
@@ -1206,7 +1202,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
             ):
                 st.error("Preencha os campos obrigatórios.")
             else:
-                existe = conn.execute(
+                existe = get_conn().execute(
                     "SELECT 1 FROM clientes WHERE usuario = %s",
                     (usuario.strip(),),
                 ).fetchone()
@@ -1214,7 +1210,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                 if existe:
                     st.error("Usuário já existe. Informe outro usuário.")
                 else:
-                    conn.execute(
+                    get_conn().execute(
                         """
                         INSERT INTO clientes (usuario, senha, nome, ativo, cpf, empresa_id, funcao)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -1238,7 +1234,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
     if "cliente_editando_id" not in st.session_state:
         st.session_state.cliente_editando_id = None
 
-    clientes = conn.execute(
+    clientes = get_conn().execute(
         """
         SELECT
             c.id,
@@ -1255,7 +1251,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
         """
     ).fetchall()
 
-    empresas_ativas = conn.execute(
+    empresas_ativas = get_conn().execute(
         "SELECT id, fantasia FROM empresas WHERE ativo = TRUE ORDER BY fantasia"
     ).fetchall()
     mapa_empresas_id_nome = {row["id"]: row["fantasia"] for row in empresas_ativas}
@@ -1291,7 +1287,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                 key=f"inativar_{id_cli}",
                                 use_container_width=True,
                             ):
-                                conn.execute(
+                                get_conn().execute(
                                     "UPDATE clientes SET ativo = FALSE WHERE id = %s",
                                     (id_cli,),
                                 )
@@ -1302,7 +1298,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                 key=f"ativar_{id_cli}",
                                 use_container_width=True,
                             ):
-                                conn.execute(
+                                get_conn().execute(
                                     "UPDATE clientes SET ativo = TRUE WHERE id = %s",
                                     (id_cli,),
                                 )
@@ -1312,7 +1308,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                         if st.button(
                             "Excluir", key=f"excluir_{id_cli}", use_container_width=True
                         ):
-                            tem_solicitacao = conn.execute(
+                            tem_solicitacao = get_conn().execute(
                                 "SELECT 1 FROM solicitacoes WHERE cliente = %s LIMIT 1",
                                 (cli["usuario"],),
                             ).fetchone()
@@ -1322,7 +1318,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                     f"O cliente {cli['usuario']} possui solicitações. Inative ao invés de excluir."
                                 )
                             else:
-                                conn.execute(
+                                get_conn().execute(
                                     "DELETE FROM clientes WHERE id = %s",
                                     (id_cli,),
                                 )
@@ -1405,7 +1401,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                             ):
                                 st.error("Preencha nome, CPF e usuário.")
                             else:
-                                usuario_existente = conn.execute(
+                                usuario_existente = get_conn().execute(
                                     "SELECT 1 FROM clientes WHERE usuario = %s AND id <> %s",
                                     (novo_usuario.strip(), id_cli),
                                 ).fetchone()
@@ -1416,7 +1412,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                     )
                                 else:
                                     if nova_senha.strip():
-                                        conn.execute(
+                                        get_conn().execute(
                                             """
                                             UPDATE clientes
                                             SET nome = %s, cpf = %s, usuario = %s, funcao = %s, empresa_id = %s, senha = %s
@@ -1433,7 +1429,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                             ),
                                         )
                                     else:
-                                        conn.execute(
+                                        get_conn().execute(
                                             """
                                             UPDATE clientes
                                             SET nome = %s, cpf = %s, usuario = %s, funcao = %s, empresa_id = %s
@@ -1449,7 +1445,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                             ),
                                         )
 
-                                    conn.execute(
+                                    get_conn().execute(
                                         "UPDATE solicitacoes SET cliente = %s WHERE cliente = %s",
                                         (novo_usuario.strip(), cli["usuario"]),
                                     )
