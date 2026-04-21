@@ -359,10 +359,10 @@ def nova_solicitacao():
 
 def formatar_status_texto(status):
     status_map = {
-        "Pendente": "🔴 Pendente",
-        "Iniciado": "🟢 Iniciado",
-        "Pausado": "🟡 Pausado",
-        "Resolvido": "🔵 Resolvido",
+        "Em análise": "🔴 Em análise",
+        "Em atendimento": "🟢 Em atendimento",
+        "Atendimento pausado": "🟡 Atendimento pausado",
+        "Concluído": "🔵 Concluído",
     }
     return status_map.get(status, status)
 
@@ -463,12 +463,138 @@ def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
             )
 
 
+
+def aplicar_estilo_global():
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background:
+                radial-gradient(circle at top right, rgba(0, 153, 255, 0.18) 0%, transparent 28%),
+                radial-gradient(circle at bottom left, rgba(0, 200, 255, 0.12) 0%, transparent 30%),
+                linear-gradient(135deg, #061C33 0%, #0B3A63 100%);
+            position: relative;
+        }
+
+        .stApp::before {
+            content: "";
+            position: fixed;
+            top: -120px;
+            right: -120px;
+            width: 420px;
+            height: 420px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 153, 255, 0.22) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .stApp::after {
+            content: "";
+            position: fixed;
+            left: -140px;
+            bottom: -140px;
+            width: 420px;
+            height: 420px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0, 200, 255, 0.14) 0%, transparent 72%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .block-container {
+            position: relative;
+            z-index: 1;
+            padding-top: 1.5rem !important;
+        }
+
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, rgba(4,18,34,0.94) 0%, rgba(8,42,74,0.94) 100%);
+            border-right: 1px solid rgba(173, 216, 255, 0.10);
+        }
+
+        div[data-testid="stMetric"] {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(173, 216, 255, 0.12);
+            border-radius: 18px;
+            padding: 14px 16px;
+            backdrop-filter: blur(8px);
+        }
+
+        div[data-testid="stExpander"] {
+            background: rgba(255,255,255,0.03);
+            border-radius: 14px;
+            border: 1px solid rgba(173, 216, 255, 0.08);
+        }
+
+        div[data-testid="stDataFrame"] {
+            background: rgba(255,255,255,0.03);
+            border-radius: 14px;
+            border: 1px solid rgba(173, 216, 255, 0.08);
+            padding: 6px;
+        }
+
+        .bv-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(173, 216, 255, 0.10);
+            border-radius: 18px;
+            padding: 14px 18px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 14px;
+        }
+
+        .bv-subtitle {
+            color: #c7d7e6;
+            font-size: 14px;
+        }
+
+        .stButton > button, .stDownloadButton > button {
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def aplicar_estilo_login():
     st.markdown(
         """
         <style>
         .stApp {
-            background: linear-gradient(180deg, #061C33 0%, #0B3A63 100%);
+            background:
+                radial-gradient(circle at top right, rgba(0, 153, 255, 0.20) 0%, transparent 28%),
+                radial-gradient(circle at bottom left, rgba(0, 200, 255, 0.14) 0%, transparent 30%),
+                linear-gradient(180deg, #061C33 0%, #0B3A63 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stApp::before {
+            content: "";
+            position: fixed;
+            top: -140px;
+            right: -120px;
+            width: 430px;
+            height: 430px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,153,255,0.24) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .stApp::after {
+            content: "";
+            position: fixed;
+            left: -150px;
+            bottom: -140px;
+            width: 420px;
+            height: 420px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,200,255,0.16) 0%, transparent 72%);
+            z-index: 0;
+            pointer-events: none;
         }
 
         section[data-testid="stSidebar"] {
@@ -479,14 +605,11 @@ def aplicar_estilo_login():
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             padding-top: 0 !important;
             padding-bottom: 0 !important;
-        }
-
-        .login-wrapper {
-            width: 100%;
-            max-width: 420px;
+            position: relative;
+            z-index: 1;
         }
 
         .stTextInput label {
@@ -495,7 +618,7 @@ def aplicar_estilo_login():
         }
 
         .stTextInput > div > div > input {
-            background-color: rgba(255,255,255,0.06) !important;
+            background-color: rgba(255,255,255,0.07) !important;
             color: white !important;
             border: 1px solid rgba(173, 216, 255, 0.22) !important;
             border-radius: 10px !important;
@@ -505,6 +628,15 @@ def aplicar_estilo_login():
             width: 100%;
             border-radius: 12px;
             font-weight: 700;
+        }
+
+        .bv-login-card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(173, 216, 255, 0.14);
+            border-radius: 22px;
+            padding: 26px 24px 22px 24px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 18px 50px rgba(0,0,0,0.18);
         }
         </style>
         """,
@@ -521,6 +653,7 @@ if not st.session_state.logado:
     col1, col2, col3 = st.columns([1.2, 1, 1.2])
 
     with col2:
+        st.markdown("<div class='bv-login-card'>", unsafe_allow_html=True)
         if logo_b64:
             st.markdown(
                 f"""
@@ -592,6 +725,8 @@ if not st.session_state.logado:
 # ----------------------------
 # APP LOGADO
 # ----------------------------
+aplicar_estilo_global()
+
 header_logo_col, header_title_col = st.columns([0.8, 8])
 
 with header_logo_col:
@@ -611,8 +746,11 @@ with header_title_col:
         unsafe_allow_html=True,
     )
 
-st.markdown("<hr style='border:1px solid #333; margin-top:0;'>", unsafe_allow_html=True)
-st.caption("Gestão de demandas e acompanhamento em tempo real")
+st.markdown("<hr style='border:1px solid rgba(255,255,255,0.12); margin-top:0;'>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='bv-card'><div class='bv-subtitle'>Gestão de demandas e acompanhamento em tempo real</div></div>",
+    unsafe_allow_html=True,
+)
 
 
 # ----------------------------
@@ -733,7 +871,7 @@ if menu == "Nova Solicitação":
                 WHERE cliente = %s
                   AND titulo = %s
                   AND descricao = %s
-                  AND status IN ('Pendente', 'Iniciado', 'Pausado')
+                  AND status IN ('Em análise', 'Em atendimento', 'Atendimento pausado')
                 LIMIT 1
                 """,
                 (cliente_nome, titulo_limpo, descricao_limpa),
@@ -819,10 +957,10 @@ elif menu == "Demandas Solicitadas":
     if st.session_state.get("mostrar_legenda", False):
         st.info(
             """
-🔴 Pendente  
-🟢 Iniciado  
-🟡 Pausado  
-🔵 Resolvido
+🔴 Em análise  
+🟢 Em atendimento  
+🟡 Atendimento pausado  
+🔵 Concluído
             """
         )
 
