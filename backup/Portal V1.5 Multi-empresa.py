@@ -559,89 +559,14 @@ def normalizar_status(status):
 
 
 def formatar_status_texto(status):
-    return normalizar_status(status)
-
-
-def obter_status_style(status):
     status = normalizar_status(status)
-    styles = {
-        "Em análise": {
-            "bg": "#EAF2FF",
-            "border": "#C7D7FE",
-            "text": "#1E3A5F",
-            "icon": "#315E9E",
-            "svg": """
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-                    <path d="M12 7V12L15 14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            """,
-        },
-        "Em atendimento": {
-            "bg": "#E8F7F4",
-            "border": "#BFE7DD",
-            "text": "#0F4C45",
-            "icon": "#148777",
-            "svg": """
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 3L4 7V12C4 17 7.5 20.5 12 21C16.5 20.5 20 17 20 12V7L12 3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                </svg>
-            """,
-        },
-        "Aguardando cliente": {
-            "bg": "#FFF6E8",
-            "border": "#F2D7A6",
-            "text": "#6B4E16",
-            "icon": "#C58A1C",
-            "svg": """
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 8V12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <circle cx="12" cy="16" r="1" fill="currentColor"/>
-                    <path d="M10.29 3.86L1.82 18A2 2 0 0 0 3.53 21H20.47A2 2 0 0 0 22.18 18L13.71 3.86A2 2 0 0 0 10.29 3.86Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                </svg>
-            """,
-        },
-        "Concluído": {
-            "bg": "#EDF7ED",
-            "border": "#CBE7CB",
-            "text": "#1F5A2E",
-            "icon": "#2F8F46",
-            "svg": """
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            """,
-        },
+    status_map = {
+        "Em análise": "🔴 Em análise",
+        "Em atendimento": "🟢 Em atendimento",
+        "Aguardando cliente": "🟡 Aguardando cliente",
+        "Concluído": "🔵 Concluído",
     }
-    return styles.get(status, styles["Em análise"])
-
-
-def render_status_badge(status, small=False):
-    status = normalizar_status(status)
-    s = obter_status_style(status)
-    padding = "4px 10px" if small else "6px 12px"
-    font_size = "12px" if small else "13px"
-    return f"""
-        <div style="
-            display:inline-flex;
-            align-items:center;
-            gap:8px;
-            padding:{padding};
-            border-radius:999px;
-            background:{s['bg']};
-            border:1px solid {s['border']};
-            color:{s['text']};
-            font-size:{font_size};
-            font-weight:600;
-            line-height:1;
-            white-space:nowrap;
-        ">
-            <span style="display:flex; color:{s['icon']};">
-                {s['svg']}
-            </span>
-            <span>{status}</span>
-        </div>
-    """
+    return status_map.get(status, status)
 
 
 def obter_clientes_ativos():
@@ -825,99 +750,6 @@ def obter_solicitacoes_filtradas(
     return dados
 
 
-def aplicar_estilo_app():
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background: linear-gradient(180deg, #F4F7FB 0%, #EDF2F7 100%);
-            color: #1F2937;
-        }
-
-        .main .block-container {
-            padding-top: 1.25rem;
-            padding-bottom: 2rem;
-        }
-
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0F172A 0%, #162236 100%);
-            border-right: 1px solid rgba(255,255,255,0.06);
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: #E5EDF6;
-        }
-
-        [data-testid="stSidebarNav"] {
-            display: none;
-        }
-
-        div[data-testid="stMetric"] {
-            background: #FFFFFF;
-            border: 1px solid #D9E2EC;
-            border-radius: 16px;
-            padding: 12px 14px;
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
-        }
-
-        div[data-testid="stForm"],
-        div[data-testid="stExpander"],
-        div[data-testid="stDataFrame"],
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            border-radius: 16px;
-        }
-
-        .stTextInput > div > div > input,
-        .stTextArea textarea,
-        .stSelectbox > div > div,
-        .stMultiSelect > div > div,
-        .stDateInput > div > div,
-        .stNumberInput > div > div {
-            background: #FFFFFF !important;
-            border: 1px solid #D9E2EC !important;
-            border-radius: 12px !important;
-        }
-
-        .stButton > button {
-            border-radius: 12px;
-            border: 1px solid #CBD5E1;
-            font-weight: 600;
-            background: #FFFFFF;
-        }
-
-        .bv-page-title {
-            margin-bottom: 0;
-            color: #0F172A;
-            font-weight: 700;
-        }
-
-        .bv-page-subtitle {
-            color: #667085;
-            margin-top: 2px;
-        }
-
-        .bv-section-card {
-            background: #FFFFFF;
-            border: 1px solid #D9E2EC;
-            border-radius: 18px;
-            padding: 16px 18px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
-            margin-bottom: 12px;
-        }
-
-        .bv-soft-divider {
-            border: 0;
-            height: 1px;
-            background: linear-gradient(90deg, rgba(15,23,42,0.10), rgba(15,23,42,0.04));
-            margin-top: 8px;
-            margin-bottom: 8px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def aplicar_estilo_login():
     st.markdown(
         """
@@ -1040,8 +872,6 @@ if not st.session_state.logado:
 # ----------------------------
 # APP LOGADO
 # ----------------------------
-aplicar_estilo_app()
-
 header_logo_col, header_title_col = st.columns([0.8, 8])
 
 with header_logo_col:
@@ -1057,15 +887,12 @@ with header_logo_col:
 
 with header_title_col:
     st.markdown(
-        "<h1 class='bv-page-title'>Portal Business Vision</h1>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        "<div class='bv-page-subtitle'>Gestão de demandas e acompanhamento em tempo real</div>",
+        "<h1 style='margin-bottom:0;'>Portal Business Vision</h1>",
         unsafe_allow_html=True,
     )
 
-st.markdown("<hr class='bv-soft-divider'>", unsafe_allow_html=True)
+st.markdown("<hr style='border:1px solid #333; margin-top:0;'>", unsafe_allow_html=True)
+st.caption("Gestão de demandas e acompanhamento em tempo real")
 
 
 # ----------------------------
@@ -1097,7 +924,7 @@ atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(f"Usuário: **{st.session_state.usuario}**")
+st.sidebar.markdown(f"👤 Usuário: **{st.session_state.usuario}**")
 if st.sidebar.button("Trocar usuário"):
     logout()
 
@@ -1292,16 +1119,13 @@ elif menu == "Demandas Solicitadas":
             )
 
     if st.session_state.get("mostrar_legenda", False):
-        legenda_html = "".join(
-            [render_status_badge(status) for status in ["Em análise", "Em atendimento", "Aguardando cliente", "Concluído"]]
-        )
-        st.markdown(
-            f"""
-            <div class="bv-section-card" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                {legenda_html}
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.info(
+            """
+🔴 Em análise  
+🟢 Em atendimento  
+🟡 Aguardando cliente  
+🔵 Concluído
+            """
         )
 
     f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
@@ -1368,7 +1192,7 @@ elif menu == "Demandas Solicitadas":
 
         if st.session_state.usuario != admin_user:
             df_exibicao = df_cli.copy()
-            df_exibicao["status"] = df_exibicao["status"].apply(normalizar_status)
+            df_exibicao["status"] = df_exibicao["status"].apply(formatar_status_texto)
             df_exibicao["observacoes"] = df_exibicao["resposta"].fillna("")
             df_exibicao = df_exibicao[
                 ["id", "titulo", "prioridade", "status", "observacoes", "data_criacao"]
@@ -1405,7 +1229,7 @@ elif menu == "Demandas Solicitadas":
                     with c3:
                         st.write(f"Prioridade: **{row['prioridade']}**")
                     with c4:
-                        st.markdown(render_status_badge(status_atual), unsafe_allow_html=True)
+                        st.write(f"Status: **{formatar_status_texto(status_atual)}**")
                     with c5:
                         if row["complexidade"]:
                             st.write(f"Complexidade: **{row['complexidade']}**")
@@ -1764,20 +1588,8 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                     st.write(f"CPF: {cli['cpf'] or ''}")
 
                 with col4:
-                    if bool(cli["ativo"]):
-                        st.markdown(
-                            """
-                            <div style="display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; background:#E8F7F4; border:1px solid #BFE7DD; color:#0F4C45; font-size:12px; font-weight:600;">Ativo</div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.markdown(
-                            """
-                            <div style="display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; background:#FFF1F2; border:1px solid #FECDD3; color:#9F1239; font-size:12px; font-weight:600;">Inativo</div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+                    status_cliente = "🟢 Ativo" if bool(cli["ativo"]) else "🔴 Inativo"
+                    st.write(status_cliente)
 
                 with col5:
                     b1, b2, b3 = st.columns(3)
