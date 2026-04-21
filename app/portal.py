@@ -826,6 +826,33 @@ elif menu == "Demandas Solicitadas":
             """
         )
 
+    status_opcoes = ["Todos", "Pendente", "Iniciado", "Pausado", "Resolvido"]
+    prioridade_opcoes = ["Todas", "Alta", "Média", "Baixa"]
+
+    fc1, fc2, fc3 = st.columns([1.2, 1.2, 2.2])
+    with fc1:
+        filtro_status = st.selectbox(
+            "Filtrar por status",
+            status_opcoes,
+            index=0,
+            key="filtro_status_demandas",
+        )
+    with fc2:
+        filtro_prioridade = st.selectbox(
+            "Filtrar por prioridade",
+            prioridade_opcoes,
+            index=0,
+            key="filtro_prioridade_demandas",
+        )
+    with fc3:
+        busca_demanda = st.text_input(
+            "Buscar por ID ou título",
+            placeholder="Ex.: 125 ou erro no relatório",
+            key="busca_demandas",
+        ).strip()
+
+    st.caption("Exibindo no máximo 50 registros por cliente com os filtros aplicados.")
+
     if st.session_state.usuario == admin_user:
         clientes = [
             row["usuario"]
@@ -840,8 +867,30 @@ elif menu == "Demandas Solicitadas":
         nome_exibicao = obter_nome_cliente(cli)
         st.subheader(f"Cliente: {nome_exibicao} ({cli})")
 
+        where = ["cliente = %s"]
+        params = [cli]
+
+        if filtro_status != "Todos":
+            where.append("status = %s")
+            params.append(filtro_status)
+
+        if filtro_prioridade != "Todas":
+            where.append("prioridade = %s")
+            params.append(filtro_prioridade)
+
+        if busca_demanda:
+            if busca_demanda.isdigit():
+                where.append("(CAST(id AS TEXT) = %s OR titulo ILIKE %s)")
+                params.append(busca_demanda)
+                params.append(f"%{busca_demanda}%")
+            else:
+                where.append("titulo ILIKE %s")
+                params.append(f"%{busca_demanda}%")
+
+        params.append(50)
+
         dados_cli = conn.execute(
-            """
+            f"""
             SELECT
                 id,
                 cliente,
@@ -855,14 +904,15 @@ elif menu == "Demandas Solicitadas":
                 inicio_atendimento,
                 fim_atendimento
             FROM solicitacoes
-            WHERE cliente = %s
+            WHERE {" AND ".join(where)}
             ORDER BY id DESC
+            LIMIT %s
             """,
-            (cli,),
+            params,
         ).fetchall()
 
         if not dados_cli:
-            st.info("Nenhuma solicitação para este cliente.")
+            st.info("Nenhuma solicitação encontrada para este cliente com os filtros aplicados.")
             continue
 
         df_cli = pd.DataFrame([dict(r) for r in dados_cli])
