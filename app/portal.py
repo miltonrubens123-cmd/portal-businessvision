@@ -675,10 +675,26 @@ def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
 
 
 def obter_solicitacoes_filtradas(
-    cliente, status_filtro="Todos", prioridade_filtro="Todas", busca="", limite=50
+    cliente_id=None,
+    cliente_usuario=None,
+    empresa_id=None,
+    status_filtro="Todos",
+    prioridade_filtro="Todas",
+    busca="",
+    limite=50,
 ):
-    filtros = ["cliente = %s"]
-    params = [cliente]
+    filtros = []
+    params = []
+
+    if cliente_id is not None:
+        filtros.append("(cliente_id = %s OR (cliente_id IS NULL AND cliente = %s))")
+        params.extend([cliente_id, cliente_usuario or ""])
+    elif empresa_id is not None:
+        filtros.append("empresa_id = %s")
+        params.append(empresa_id)
+    elif cliente_usuario:
+        filtros.append("cliente = %s")
+        params.append(cliente_usuario)
 
     if status_filtro != "Todos":
         filtros.append(
@@ -708,10 +724,14 @@ def obter_solicitacoes_filtradas(
             filtros.append("titulo ILIKE %s")
             params.append(f"%{busca}%")
 
+    where_clause = " AND ".join(filtros) if filtros else "TRUE"
+
     sql = f"""
         SELECT
             id,
             cliente,
+            cliente_id,
+            empresa_id,
             titulo,
             descricao,
             prioridade,
@@ -722,7 +742,7 @@ def obter_solicitacoes_filtradas(
             inicio_atendimento,
             fim_atendimento
         FROM solicitacoes
-        WHERE {' AND '.join(filtros)}
+        WHERE {where_clause}
         ORDER BY id DESC
         LIMIT %s
     """
@@ -1152,20 +1172,28 @@ elif menu == "Demandas Solicitadas":
     )
 
     if st.session_state.usuario == admin_user:
-        clientes = [
-            row["usuario"]
-            for row in conn.execute(
-                "SELECT usuario FROM clientes WHERE ativo = TRUE ORDER BY nome, usuario"
-            ).fetchall()
-        ]
+        clientes = conn.execute(
+            """
+            SELECT id, usuario, nome, empresa_id
+            FROM clientes
+            WHERE ativo = TRUE
+            ORDER BY nome, usuario
+            """
+        ).fetchall()
     else:
-        clientes = [st.session_state.usuario]
+        cliente_logado = obter_cliente_por_usuario(st.session_state.usuario)
+        clientes = [cliente_logado] if cliente_logado else []
 
     encontrou_resultado = False
 
     for cli in clientes:
+        if not cli:
+            continue
+
         dados_cli = obter_solicitacoes_filtradas(
-            cliente=cli,
+            cliente_id=cli["id"],
+            cliente_usuario=cli["usuario"],
+            empresa_id=None,
             status_filtro=status_filtro,
             prioridade_filtro=prioridade_filtro,
             busca=busca_filtro,
@@ -1176,8 +1204,8 @@ elif menu == "Demandas Solicitadas":
             continue
 
         encontrou_resultado = True
-        nome_exibicao = obter_nome_cliente(cli)
-        st.subheader(f"Cliente: {nome_exibicao} ({cli})")
+        nnome_exibicao = cli["nome"] or cli["usuario"]
+        st.subheader(f"Cliente: {nome_exibicao} ({cli['usuario']})")
 
         df_cli = pd.DataFrame(dados_cli)
 
