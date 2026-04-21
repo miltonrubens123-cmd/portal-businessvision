@@ -11,7 +11,6 @@ from PIL import Image
 import psycopg 
 from zoneinfo import ZoneInfo
 
-
 def get_conn():
     return psycopg.connect(
         st.secrets["database"]["url"]
