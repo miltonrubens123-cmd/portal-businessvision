@@ -1,4 +1,3 @@
-print("TESTE MIGRACAO NEON")
 import os
 import base64
 import re
@@ -14,6 +13,7 @@ from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
 
 
+@st.cache_resource
 def get_connection():
     database_url = None
 
@@ -60,7 +60,7 @@ admin_user = "admin_business"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
 
-conn = get_connection()
+conn = get_connection()  # conexão cacheada entre reruns do Streamlit
 
 
 # ----------------------------
@@ -220,7 +220,11 @@ def criar_tabelas():
         conn.execute("ALTER TABLE sessoes_login ADD COLUMN menu TEXT")
 
 
-criar_tabelas()
+# Executa bootstrap de schema apenas se explicitamente habilitado.
+# Em produção, deixe desabilitado para evitar DDL e consultas ao information_schema em todo rerun.
+RUN_DB_BOOTSTRAP = os.getenv("RUN_DB_BOOTSTRAP", "false").lower() == "true"
+if RUN_DB_BOOTSTRAP:
+    criar_tabelas()
 
 
 # ----------------------------
@@ -881,9 +885,11 @@ elif menu == "Demandas Solicitadas":
             st.dataframe(df_exibicao, use_container_width=True)
 
             for _, row in df_cli.iterrows():
-                render_anexos_como_arquivo(
-                    int(row["id"]), prefixo=f"cliente_{int(row['id'])}"
-                )
+                anexo_id = int(row["id"])
+                with st.expander(f"Anexos da solicitação #{anexo_id}"):
+                    render_anexos_como_arquivo(
+                        anexo_id, prefixo=f"cliente_{anexo_id}"
+                    )
         else:
             for _, row in df_cli.iterrows():
                 status_atual = row["status"]
@@ -905,9 +911,10 @@ elif menu == "Demandas Solicitadas":
                         if row["complexidade"]:
                             st.write(f"Complexidade: **{row['complexidade']}**")
 
-                    render_anexos_como_arquivo(
-                        solicitacao_id, prefixo=f"admin_{solicitacao_id}"
-                    )
+                    with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
+                        render_anexos_como_arquivo(
+                            solicitacao_id, prefixo=f"admin_{solicitacao_id}"
+                        )
 
                     obs_key = f"obs_{solicitacao_id}"
                     if obs_key not in st.session_state:
