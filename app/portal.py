@@ -1441,7 +1441,10 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                             st.session_state.cliente_editando_id = None
                             st.rerun()
     else:
-        st.info("Nenhum cliente cadastrado ainda.")def aplicar_estilo_global():
+        st.info("Nenhum cliente cadastrado ainda.")
+
+
+def aplicar_estilo_global():
     st.markdown(
         """
         <style>
