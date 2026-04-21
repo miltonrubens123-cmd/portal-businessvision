@@ -115,9 +115,7 @@ def obter_secret(path, default=None):
 
 def obter_admin_config():
     admin_user = (
-        obter_secret(["admin", "user"])
-        or os.getenv("ADMIN_USER")
-        or ""
+        obter_secret(["admin", "user"]) or os.getenv("ADMIN_USER") or ""
     ).strip()
 
     admin_password_hash = (
@@ -127,9 +125,7 @@ def obter_admin_config():
     ).strip()
 
     admin_password_plain = (
-        obter_secret(["admin", "password"])
-        or os.getenv("ADMIN_PASSWORD")
-        or ""
+        obter_secret(["admin", "password"]) or os.getenv("ADMIN_PASSWORD") or ""
     ).strip()
 
     return {
@@ -137,6 +133,18 @@ def obter_admin_config():
         "password_hash": admin_password_hash,
         "password_plain": admin_password_plain,
     }
+
+
+def obter_cliente_por_usuario(usuario):
+    return conn.execute(
+        """
+        SELECT id, usuario, nome, empresa_id, ativo
+        FROM clientes
+        WHERE usuario = %s
+        LIMIT 1
+        """,
+        (usuario,),
+    ).fetchone()
 
 
 def senha_esta_hasheada(valor):
@@ -247,7 +255,6 @@ def validar_upload_imagem(arquivo):
 
 admin_config = obter_admin_config()
 admin_user = admin_config["user"]
-
 
 
 # ----------------------------
@@ -958,8 +965,8 @@ if menu == "Nova Solicitação":
             st.stop()
     else:
         cliente_usuario = st.session_state.usuario
-        cliente_info = obter_cliente_por_usuario(cliente_usuario)
-        st.text_input("Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True)
+    cliente_info = obter_cliente_por_usuario(cliente_usuario)
+    st.text_input("Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True)
 
     titulo = st.text_input("Título", key="titulo")
     descricao = st.text_area("Descrição", key="descricao")
@@ -999,17 +1006,14 @@ if menu == "Nova Solicitação":
     if nova:
         nova_solicitacao()
 
+    cliente_id = cliente_info["id"] if cliente_info else None
+    empresa_id = cliente_info["empresa_id"] if cliente_info else None
+
     if enviar:
-        cliente_id = cliente_info["id"] if cliente_info else None
-        empresa_id = cliente_info["empresa_id"] if cliente_info else None
         titulo_limpo = titulo.strip()
         descricao_limpa = descricao.strip()
 
-        if not cliente_info or not cliente_id:
-            st.error("Não foi possível identificar o cliente da solicitação.")
-        elif empresa_id is None:
-            st.error("O cliente selecionado não está vinculado a nenhuma empresa.")
-        elif not titulo_limpo or not descricao_limpa:
+        if not titulo_limpo or not descricao_limpa:
             st.warning("Preencha título e descrição antes de enviar.")
         elif not arquivos or len(arquivos) == 0:
             st.error("É obrigatório enviar pelo menos uma imagem.")
@@ -1029,9 +1033,9 @@ if menu == "Nova Solicitação":
                     SELECT id
                     FROM solicitacoes
                     WHERE cliente_id = %s
-                      AND titulo = %s
-                      AND descricao = %s
-                      AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
+                    AND titulo = %s
+                    AND descricao = %s
+                    AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
                     LIMIT 1
                     """,
                     (cliente_id, titulo_limpo, descricao_limpa),
@@ -1103,6 +1107,13 @@ if menu == "Nova Solicitação":
                     except psycopg.Error as e:
                         st.error(f"Erro ao gravar solicitação: {e}")
 
+if not cliente_info or not cliente_id:
+    st.error("Não foi possível identificar o cliente da solicitação.")
+    st.stop()
+
+if empresa_id is None:
+    st.error("O cliente selecionado não está vinculado a nenhuma empresa.")
+    st.stop()
 
 # ----------------------------
 # DEMANDAS SOLICITADAS
@@ -1132,7 +1143,13 @@ elif menu == "Demandas Solicitadas":
     with f1:
         status_filtro = st.selectbox(
             "Filtrar por status",
-            ["Todos", "Em análise", "Em atendimento", "Aguardando cliente", "Concluído"],
+            [
+                "Todos",
+                "Em análise",
+                "Em atendimento",
+                "Aguardando cliente",
+                "Concluído",
+            ],
             index=0,
             key="filtro_status_demandas",
         )
@@ -1150,7 +1167,9 @@ elif menu == "Demandas Solicitadas":
             key="busca_demandas",
         )
 
-    st.caption("Exibindo no máximo 50 registros por cliente para preservar performance.")
+    st.caption(
+        "Exibindo no máximo 50 registros por cliente para preservar performance."
+    )
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1185,7 +1204,7 @@ elif menu == "Demandas Solicitadas":
             continue
 
         encontrou_resultado = True
-        nome_exibicao = cli["nome"] or cli["usuario"]
+        nnome_exibicao = cli["nome"] or cli["usuario"]
         st.subheader(f"Cliente: {nome_exibicao} ({cli['usuario']})")
 
         df_cli = pd.DataFrame(dados_cli)
@@ -1210,9 +1229,7 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
-                    render_anexos_como_arquivo(
-                        anexo_id, prefixo=f"cliente_{anexo_id}"
-                    )
+                    render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
         else:
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
