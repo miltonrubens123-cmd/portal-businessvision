@@ -15,28 +15,6 @@ from psycopg.rows import dict_row
 
 @st.cache_resource
 def get_connection():
-def get_conn():
-    try:
-        c = get_connection()
-        with c.cursor() as cur:
-            cur.execute("SELECT 1")
-        return c
-    except Exception:
-        get_connection.clear()
-        c = get_connection()
-        with c.cursor() as cur:
-            cur.execute("SELECT 1")
-        return c
-
-
-class ConnProxy:
-    def execute(self, *args, **kwargs):
-        conn = get_conn()
-        return conn.execute(*args, **kwargs)
-
-    def cursor(self):
-        return get_conn().cursor()
-
     database_url = None
 
     if "database" in st.secrets and "url" in st.secrets["database"]:
@@ -57,6 +35,30 @@ class ConnProxy:
         raise RuntimeError(
             f"Falha ao conectar no Postgres/Neon. Tipo: {type(e).__name__}. Detalhe: {e}"
         )
+
+
+def get_conn():
+    try:
+        c = get_connection()
+        with c.cursor() as cur:
+            cur.execute("SELECT 1")
+        return c
+    except Exception:
+        get_connection.clear()
+        c = get_connection()
+        with c.cursor() as cur:
+            cur.execute("SELECT 1")
+        return c
+
+
+class ConnProxy:
+    def execute(self, *args, **kwargs):
+        c = get_conn()
+        return c.execute(*args, **kwargs)
+
+    def cursor(self):
+        c = get_conn()
+        return c.cursor()
 
 
 # ----------------------------
@@ -909,9 +911,7 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
-                    render_anexos_como_arquivo(
-                        anexo_id, prefixo=f"cliente_{anexo_id}"
-                    )
+                    render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
         else:
             for _, row in df_cli.iterrows():
                 status_atual = row["status"]
