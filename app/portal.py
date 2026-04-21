@@ -1,14 +1,21 @@
-# PORTAL BUSINESS VISION - VERSÃO COMPLETA AJUSTADA PARA POSTGRES (NEON)
-# Conversão completa do SQLite para PostgreSQL
+# PORTAL BUSINESS VISION - POSTGRES (NEON) - VERSÃO CORRIGIDA
 
 import os
+import re
+import uuid
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 import streamlit as st
 import psycopg
+from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
 
+# ----------------------------
+# CONEXÃO (CORRIGIDA)
+# ----------------------------
 def get_connection():
-    database_url = None
-
     if "database" in st.secrets and "url" in st.secrets["database"]:
         database_url = st.secrets["database"]["url"]
         st.info("Origem da conexão: st.secrets[database][url]")
@@ -29,8 +36,9 @@ def get_connection():
         return conn
 
     except Exception as e:
+        # CORREÇÃO: agora mostra o erro real
         raise RuntimeError(
-            f"Falha ao conectar no Postgres/Neon. Tipo: {type(e).__name__}. Detalhe: {str(e)}"
+            f"Falha ao conectar no Postgres/Neon. Tipo: {type(e).__name__}. Detalhe: {e}"
         )
 
 conn = get_connection()
@@ -40,7 +48,6 @@ conn = get_connection()
 # ----------------------------
 st.set_page_config(page_title="Portal Business Vision", layout="wide")
 
-BASE_DIR = Path(__file__).parent
 admin_user = "admin_business"
 admin_pass = "M@ionese123"
 APP_TZ = ZoneInfo("America/Santarem")
@@ -50,26 +57,6 @@ APP_TZ = ZoneInfo("America/Santarem")
 # ----------------------------
 def agora():
     return datetime.now(APP_TZ)
-
-# ----------------------------
-# SESSÃO LOGIN
-# ----------------------------
-def criar_sessao_login(usuario, menu="Nova Solicitação"):
-    token = str(uuid.uuid4())
-
-    conn.execute(
-        """
-        INSERT INTO sessoes_login (token, usuario, menu, data_criacao)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (token)
-        DO UPDATE SET usuario = EXCLUDED.usuario,
-                      menu = EXCLUDED.menu,
-                      data_criacao = EXCLUDED.data_criacao
-        """,
-        (token, usuario, menu, agora()),
-    )
-
-    return token
 
 # ----------------------------
 # LOGIN
@@ -87,22 +74,16 @@ if not st.session_state.logado:
         if usuario == admin_user and senha == admin_pass:
             st.session_state.logado = True
             st.session_state.usuario = usuario
-            criar_sessao_login(usuario)
             st.rerun()
 
         row = conn.execute(
-            """
-            SELECT usuario
-            FROM clientes
-            WHERE usuario = %s AND senha = %s AND ativo = TRUE
-            """,
+            "SELECT usuario FROM clientes WHERE usuario = %s AND senha = %s AND ativo = TRUE",
             (usuario, senha),
         ).fetchone()
 
         if row:
             st.session_state.logado = True
             st.session_state.usuario = usuario
-            criar_sessao_login(usuario)
             st.rerun()
         else:
             st.error("Usuário ou senha inválidos")
@@ -151,7 +132,6 @@ if menu == "Nova Solicitação":
                         agora(),
                     ),
                 )
-
                 solicitacao_id = cur.fetchone()["id"]
 
             st.success(f"Solicitação enviada #{solicitacao_id}")
