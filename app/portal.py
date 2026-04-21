@@ -2,35 +2,36 @@
 # Conversão completa do SQLite para PostgreSQL
 
 import os
-import base64
-import re
-import uuid
-from datetime import datetime
-from pathlib import Path
-
-import pandas as pd
 import streamlit as st
-from PIL import Image
 import psycopg
-from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
 
-# ----------------------------
-# CONEXÃO
-# ----------------------------
 def get_connection():
-    if "database" in st.secrets:
+    database_url = None
+
+    if "database" in st.secrets and "url" in st.secrets["database"]:
         database_url = st.secrets["database"]["url"]
+        st.info("Origem da conexão: st.secrets[database][url]")
     else:
         database_url = os.getenv("DATABASE_URL")
+        st.info("Origem da conexão: variável de ambiente DATABASE_URL")
 
     if not database_url:
         raise RuntimeError("DATABASE_URL não configurado.")
 
     try:
-        return psycopg.connect(database_url, row_factory=dict_row, autocommit=True)
+        conn = psycopg.connect(
+            database_url,
+            row_factory=dict_row,
+            autocommit=True,
+        )
+        st.success("Conexão com o banco realizada com sucesso.")
+        return conn
+
     except Exception as e:
-        raise RuntimeError(f"Erro ao conectar no banco: {e}")
+        raise RuntimeError(
+            f"Falha ao conectar no Postgres/Neon. Tipo: {type(e).__name__}. Detalhe: {str(e)}"
+        )
 
 conn = get_connection()
 
