@@ -135,6 +135,18 @@ def obter_admin_config():
     }
 
 
+def obter_cliente_por_usuario(usuario):
+    return conn.execute(
+        """
+        SELECT id, usuario, nome, empresa_id, ativo
+        FROM clientes
+        WHERE usuario = %s
+        LIMIT 1
+        """,
+        (usuario,),
+    ).fetchone()
+
+
 def senha_esta_hasheada(valor):
     return isinstance(valor, str) and valor.startswith(f"{PASSWORD_SCHEME}$")
 
@@ -553,112 +565,15 @@ def normalizar_status(status):
     return mapa.get(status, status)
 
 
-def render_status_badge(status):
+def formatar_status_texto(status):
     status = normalizar_status(status)
-
-    styles = {
-        "Em análise": {
-            "bg": "#EEF4FF",
-            "border": "#D0DDFB",
-            "text": "#1D4ED8",
-            "label": "Em análise",
-        },
-        "Em atendimento": {
-            "bg": "#ECFDF3",
-            "border": "#CDEAD8",
-            "text": "#027A48",
-            "label": "Em atendimento",
-        },
-        "Aguardando cliente": {
-            "bg": "#FFF7ED",
-            "border": "#F6DEC9",
-            "text": "#C2410C",
-            "label": "Aguardando cliente",
-        },
-        "Concluído": {
-            "bg": "#F2F4F7",
-            "border": "#E4E7EC",
-            "text": "#344054",
-            "label": "Concluído",
-        },
+    status_map = {
+        "Em análise": "🔴 Em análise",
+        "Em atendimento": "🟢 Em atendimento",
+        "Aguardando cliente": "🟡 Aguardando cliente",
+        "Concluído": "🔵 Concluído",
     }
-
-    s = styles.get(status, styles["Em análise"])
-
-    return f"""
-    <div style="
-        display:inline-flex;
-        align-items:center;
-        padding:6px 10px;
-        border-radius:999px;
-        background:{s['bg']};
-        border:1px solid {s['border']};
-        color:{s['text']};
-        font-size:12px;
-        font-weight:700;
-        line-height:1;
-        white-space:nowrap;
-    ">
-        {s['label']}
-    </div>
-    """
-
-
-def render_prioridade_badge(prioridade):
-    prioridade = (prioridade or "").strip()
-
-    styles = {
-        "Alta": {
-            "bg": "#FEF3F2",
-            "border": "#F3C7C2",
-            "text": "#B42318",
-        },
-        "Média": {
-            "bg": "#FFF7ED",
-            "border": "#F6DEC9",
-            "text": "#C2410C",
-        },
-        "Baixa": {
-            "bg": "#F0FDF4",
-            "border": "#CDEAD8",
-            "text": "#15803D",
-        },
-    }
-
-    s = styles.get(
-        prioridade,
-        {"bg": "#F2F4F7", "border": "#E4E7EC", "text": "#475467"},
-    )
-
-    return f"""
-    <div style="
-        display:inline-flex;
-        align-items:center;
-        padding:6px 10px;
-        border-radius:999px;
-        background:{s['bg']};
-        border:1px solid {s['border']};
-        color:{s['text']};
-        font-size:12px;
-        font-weight:700;
-        line-height:1;
-        white-space:nowrap;
-    ">
-        {prioridade or 'Sem prioridade'}
-    </div>
-    """
-
-
-def render_status_legenda():
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(render_status_badge("Em análise"), unsafe_allow_html=True)
-    with c2:
-        st.markdown(render_status_badge("Em atendimento"), unsafe_allow_html=True)
-    with c3:
-        st.markdown(render_status_badge("Aguardando cliente"), unsafe_allow_html=True)
-    with c4:
-        st.markdown(render_status_badge("Concluído"), unsafe_allow_html=True)
+    return status_map.get(status, status)
 
 
 def obter_clientes_ativos():
@@ -961,179 +876,9 @@ if not st.session_state.logado:
     st.stop()
 
 
-def aplicar_estilo_app():
-
-    ICONS = {
-        "dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/></svg>',
-        "demandas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
-        "nova": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
-        "clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="currentColor" stroke-width="1.8"/></svg>',
-        "usuario": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.8"/></svg>',
-    }
-
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background: linear-gradient(180deg, #020b16 0%, #04111f 100%);
-            color: #EAF2FF;
-        }
-
-        [data-testid="stHeader"] {
-            background: transparent;
-        }
-
-        .block-container {
-            padding-top: 1.2rem;
-            padding-bottom: 2rem;
-            max-width: 1380px;
-        }
-
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #03101d 0%, #051424 100%);
-            border-right: 1px solid rgba(120, 145, 170, 0.12);
-            min-width: 260px !important;
-            max-width: 260px !important;
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: #EAF2FF !important;
-        }
-
-        section[data-testid="stSidebar"] button[kind="header"] {
-            display: none !important;
-        }
-
-        /* REMOVE RELEVO / CAIXAS EXAGERADAS */
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }
-
-        div[data-testid="stForm"] {
-            border: none !important;
-            box-shadow: none !important;
-            background: transparent !important;
-        }
-
-        div[data-testid="stAlert"] {
-            border-radius: 12px !important;
-            border: 1px solid rgba(120, 145, 170, 0.14) !important;
-            box-shadow: none !important;
-        }
-
-        details {
-            background: rgba(255,255,255,0.02) !important;
-            border: 1px solid rgba(120, 145, 170, 0.14) !important;
-            border-radius: 12px !important;
-            box-shadow: none !important;
-        }
-
-        /* INPUTS MAIS LIMPOS */
-        .stTextInput > div > div > input,
-        .stTextArea textarea,
-        .stSelectbox > div > div,
-        .stNumberInput input {
-            background: rgba(255,255,255,0.03) !important;
-            color: #EAF2FF !important;
-            border: 1px solid rgba(120, 145, 170, 0.18) !important;
-            border-radius: 10px !important;
-            box-shadow: none !important;
-        }
-
-        .stTextInput > div > div > input:focus,
-        .stTextArea textarea:focus,
-        .stSelectbox > div > div:focus-within,
-        .stNumberInput input:focus {
-            border: 1px solid rgba(88, 145, 255, 0.45) !important;
-            box-shadow: 0 0 0 1px rgba(88, 145, 255, 0.10) !important;
-        }
-
-        /* REMOVE LINHAS E BLOCOS BRANCOS ESTRANHOS */
-        hr {
-            border-color: rgba(120, 145, 170, 0.12) !important;
-        }
-
-        .element-container:has(hr) {
-            margin-top: 0.2rem !important;
-            margin-bottom: 0.6rem !important;
-        }
-
-        /* TIPOGRAFIA */
-        h1, h2, h3 {
-            color: #F7FBFF !important;
-            font-weight: 700 !important;
-            letter-spacing: -0.02em;
-        }
-
-        p, label, .stCaption, .stMarkdown, .stText {
-            color: #9FB2C8 !important;
-        }
-
-        strong, b {
-            color: #F7FBFF !important;
-        }
-
-        /* BOTÕES */
-        .stButton > button {
-            width: 100%;
-            border-radius: 10px;
-            font-weight: 700;
-            border: 1px solid rgba(84, 138, 226, 0.28);
-            background: linear-gradient(180deg, #17427A 0%, #10335F 100%);
-            color: #FFFFFF;
-            box-shadow: none;
-        }
-
-        .stButton > button:hover {
-            background: linear-gradient(180deg, #1C4C8E 0%, #123B6C 100%);
-            border: 1px solid rgba(110, 164, 255, 0.34);
-        }
-
-        /* DATAFRAME */
-        div[data-testid="stDataFrame"] {
-            background: rgba(255,255,255,0.02) !important;
-            border: 1px solid rgba(120, 145, 170, 0.12) !important;
-            border-radius: 12px !important;
-            box-shadow: none !important;
-        }
-
-        /* ESCONDE CONTROLE DE COLAPSAR SIDEBAR */
-        button[title="Collapse sidebar"],
-        button[title="Expand sidebar"] {
-            display: none !important;
-        }
-
-        /* AJUSTE GERAL DE ESPAÇAMENTO */
-        .stMarkdown {
-            margin-bottom: 0.3rem !important;
-        }
-
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #03101d 0%, #051424 100%);
-            border-right: 1px solid rgba(120, 145, 170, 0.12);
-            min-width: 260px !important;
-            max-width: 260px !important;
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: #EAF2FF !important;
-        }
-
-        section[data-testid="stSidebar"] button[kind="header"] {
-            display: none !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 # ----------------------------
 # APP LOGADO
 # ----------------------------
-
 header_logo_col, header_title_col = st.columns([0.8, 8])
 
 with header_logo_col:
@@ -1153,10 +898,7 @@ with header_title_col:
         unsafe_allow_html=True,
     )
 
-st.markdown(
-    "<hr style='border:1px solid rgba(120,145,170,0.12); margin-top:0;'>",
-    unsafe_allow_html=True,
-)
+st.markdown("<hr style='border:1px solid #333; margin-top:0;'>", unsafe_allow_html=True)
 st.caption("Gestão de demandas e acompanhamento em tempo real")
 
 
@@ -1169,12 +911,7 @@ menu_options_admin = [
     "Dashboard",
     "Cadastro de Clientes",
 ]
-
-menu_options_cliente = [
-    "Nova Solicitação",
-    "Demandas Solicitadas",
-]
-
+menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
 menu_options = (
     menu_options_admin
     if st.session_state.usuario == admin_user
@@ -1204,10 +941,10 @@ st.sidebar.markdown(
     }
 
     div[role="radiogroup"] {
-        gap: 0.35rem;
+        gap: 0.25rem;
     }
 
-    div[role="radiogroup"] label {
+    div[role="radiogroup"] > label {
         position: relative;
         min-height: 46px;
         margin-bottom: 8px;
@@ -1219,52 +956,51 @@ st.sidebar.markdown(
         align-items: center !important;
     }
 
-    div[role="radiogroup"] label:hover {
+    div[role="radiogroup"] > label:hover {
         border: 1px solid rgba(120,145,170,0.30);
         background: rgba(255,255,255,0.03);
     }
 
-    div[role="radiogroup"] label > div:first-child {
+    div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
 
-    div[role="radiogroup"] label > div:nth-child(2) p {
-        opacity: 0 !important;
-        margin: 0 !important;
-        font-size: 0 !important;
+    div[role="radiogroup"] > label p {
+        display: none !important;
     }
 
-    div[role="radiogroup"] label[data-checked="true"] {
+    div[role="radiogroup"] > label[data-baseweb="radio"][aria-checked="true"] {
         background: rgba(29,59,99,0.95) !important;
         border: 1px solid rgba(84,138,226,0.35) !important;
     }
 
     .bv-menu-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        height: 46px;
-        padding: 0 14px;
-        color: #B8C7D9;
-        font-size: 14px;
-        font-weight: 500;
-        pointer-events: none;
+        display:flex;
+        align-items:center;
+        gap:10px;
+        height:46px;
+        padding:0 14px;
+        color:#EAF2FF;
+        font-size:14px;
+        font-weight:500;
+        pointer-events:none;
+        margin-top:-54px;
+        margin-bottom:8px;
     }
 
-    .bv-menu-item.active {
-        color: #FFFFFF;
-        font-weight: 600;
+    .bv-menu-item.inactive {
+        color:#B8C7D9;
     }
 
     .bv-menu-icon {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 18px;
-        height: 18px;
-        color: currentColor;
-        opacity: 0.92;
-        flex-shrink: 0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        width:18px;
+        height:18px;
+        color:currentColor;
+        flex-shrink:0;
+        opacity:0.92;
     }
     </style>
     """,
@@ -1285,7 +1021,7 @@ for nome in menu_options:
     ativo = nome == menu_escolhido
     st.sidebar.markdown(
         f"""
-        <div class="bv-menu-item {'active' if ativo else ''}" style="margin-top:-54px; margin-bottom:8px;">
+        <div class="bv-menu-item {'inactive' if not ativo else ''}">
             <span class="bv-menu-icon">{ICONS.get(nome, '')}</span>
             <span>{nome}</span>
         </div>
@@ -1298,10 +1034,9 @@ st.session_state.menu_atual = menu
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
-st.sidebar.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
-iniciais = st.session_state.usuario[:2].upper()
+iniciais = (st.session_state.usuario or "US")[:2].upper()
 
 st.sidebar.markdown(
     f"""
@@ -1309,7 +1044,7 @@ st.sidebar.markdown(
         display:flex;
         align-items:center;
         gap:10px;
-        margin-top:10px;
+        margin-top:8px;
         margin-bottom:14px;
     ">
         <div style="
@@ -1323,6 +1058,7 @@ st.sidebar.markdown(
             font-weight:700;
             color:white;
             font-size:18px;
+            flex-shrink:0;
         ">
             {iniciais}
         </div>
@@ -1331,7 +1067,7 @@ st.sidebar.markdown(
             <div style="font-size:12px;color:#8FA5BC;line-height:1.2;">
                 Usuário atual
             </div>
-            <div style="font-size:15px;font-weight:700;color:#EAF2FF;line-height:1.3;">
+            <div style="font-size:15px;font-weight:700;color:#EAF2FF;line-height:1.3;word-break:break-word;">
                 {st.session_state.usuario}
             </div>
         </div>
@@ -1373,10 +1109,8 @@ if menu == "Nova Solicitação":
             st.stop()
     else:
         cliente_usuario = st.session_state.usuario
-        cliente_info = obter_cliente_por_usuario(cliente_usuario)
-        st.text_input(
-            "Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True
-        )
+    cliente_info = obter_cliente_por_usuario(cliente_usuario)
+    st.text_input("Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True)
 
     titulo = st.text_input("Título", key="titulo")
     descricao = st.text_area("Descrição", key="descricao")
@@ -1416,17 +1150,14 @@ if menu == "Nova Solicitação":
     if nova:
         nova_solicitacao()
 
+    cliente_id = cliente_info["id"] if cliente_info else None
+    empresa_id = cliente_info["empresa_id"] if cliente_info else None
+
     if enviar:
-        cliente_id = cliente_info["id"] if cliente_info else None
-        empresa_id = cliente_info["empresa_id"] if cliente_info else None
         titulo_limpo = titulo.strip()
         descricao_limpa = descricao.strip()
 
-        if not cliente_info or not cliente_id:
-            st.error("Não foi possível identificar o cliente da solicitação.")
-        elif empresa_id is None:
-            st.error("O cliente selecionado não está vinculado a nenhuma empresa.")
-        elif not titulo_limpo or not descricao_limpa:
+        if not titulo_limpo or not descricao_limpa:
             st.warning("Preencha título e descrição antes de enviar.")
         elif not arquivos or len(arquivos) == 0:
             st.error("É obrigatório enviar pelo menos uma imagem.")
@@ -1446,9 +1177,9 @@ if menu == "Nova Solicitação":
                     SELECT id
                     FROM solicitacoes
                     WHERE cliente_id = %s
-                      AND titulo = %s
-                      AND descricao = %s
-                      AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
+                    AND titulo = %s
+                    AND descricao = %s
+                    AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
                     LIMIT 1
                     """,
                     (cliente_id, titulo_limpo, descricao_limpa),
@@ -1520,31 +1251,42 @@ if menu == "Nova Solicitação":
                     except psycopg.Error as e:
                         st.error(f"Erro ao gravar solicitação: {e}")
 
+if not cliente_info or not cliente_id:
+    st.error("Não foi possível identificar o cliente da solicitação.")
+    st.stop()
+
+if empresa_id is None:
+    st.error("O cliente selecionado não está vinculado a nenhuma empresa.")
+    st.stop()
 
 # ----------------------------
 # DEMANDAS SOLICITADAS
 # ----------------------------
 elif menu == "Demandas Solicitadas":
     st.header("Demandas Solicitadas")
-    st.caption(
-        "Acompanhe solicitações, filtre registros e consulte o histórico operacional."
-    )
 
-    top1, top2 = st.columns([6, 1.2])
-    with top2:
-        if st.button("Ver status", use_container_width=True):
+    col_legenda1, col_legenda2 = st.columns([8, 1])
+
+    with col_legenda2:
+        if st.button("📌 Legenda", use_container_width=True):
             st.session_state.mostrar_legenda = not st.session_state.get(
                 "mostrar_legenda", False
             )
 
     if st.session_state.get("mostrar_legenda", False):
-        render_status_legenda()
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        st.info(
+            """
+🔴 Em análise  
+🟢 Em atendimento  
+🟡 Aguardando cliente  
+🔵 Concluído
+            """
+        )
 
-    f1, f2, f3 = st.columns([1.15, 1.15, 2.3])
+    f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
     with f1:
         status_filtro = st.selectbox(
-            "Status",
+            "Filtrar por status",
             [
                 "Todos",
                 "Em análise",
@@ -1557,22 +1299,21 @@ elif menu == "Demandas Solicitadas":
         )
     with f2:
         prioridade_filtro = st.selectbox(
-            "Prioridade",
+            "Filtrar por prioridade",
             ["Todas", "Alta", "Média", "Baixa"],
             index=0,
             key="filtro_prioridade_demandas",
         )
     with f3:
         busca_filtro = st.text_input(
-            "Buscar",
-            placeholder="Digite o ID ou parte do título",
+            "Buscar por ID ou título",
+            placeholder="Ex.: 125 ou erro no relatório",
             key="busca_demandas",
         )
 
     st.caption(
         "Exibindo no máximo 50 registros por cliente para preservar performance."
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1607,232 +1348,154 @@ elif menu == "Demandas Solicitadas":
             continue
 
         encontrou_resultado = True
-        nome_exibicao = cli["nome"] or cli["usuario"]
-        st.markdown(
-            f"<div class='bv-client-title'>Cliente: {nome_exibicao} ({cli['usuario']})</div>",
-            unsafe_allow_html=True,
-        )
+        nnome_exibicao = cli["nome"] or cli["usuario"]
+        st.subheader(f"Cliente: {nome_exibicao} ({cli['usuario']})")
 
         df_cli = pd.DataFrame(dados_cli)
 
         if st.session_state.usuario != admin_user:
+            df_exibicao = df_cli.copy()
+            df_exibicao["status"] = df_exibicao["status"].apply(formatar_status_texto)
+            df_exibicao["observacoes"] = df_exibicao["resposta"].fillna("")
+            df_exibicao = df_exibicao[
+                ["id", "titulo", "prioridade", "status", "observacoes", "data_criacao"]
+            ]
+            df_exibicao.columns = [
+                "ID",
+                "Título",
+                "Prioridade",
+                "Status",
+                "Observações",
+                "Data",
+            ]
+            st.dataframe(df_exibicao, use_container_width=True)
+
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
-                status_atual = normalizar_status(row["status"])
-
-                st.markdown("<div class='bv-demand-card'>", unsafe_allow_html=True)
-
-                top_a, top_b, top_c = st.columns([3.6, 1.4, 1.4])
-
-                with top_a:
-                    st.markdown(
-                        f"<div class='bv-demand-id'>SOLICITAÇÃO #{anexo_id}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        f"<div class='bv-demand-title'>{row['titulo']}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        f"<div class='bv-demand-desc'>{row['descricao']}</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                with top_b:
-                    st.markdown(
-                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Prioridade</strong></div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        render_prioridade_badge(row["prioridade"]),
-                        unsafe_allow_html=True,
-                    )
-
-                with top_c:
-                    st.markdown(
-                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Status</strong></div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        render_status_badge(status_atual),
-                        unsafe_allow_html=True,
-                    )
-
-                st.markdown(
-                    f"<div class='bv-meta' style='margin-top:10px'><strong>Observações:</strong> {row['resposta'] if row['resposta'] else 'Sem observações registradas.'}</div>",
-                    unsafe_allow_html=True,
-                )
-
-                data_txt = (
-                    row["data_criacao"].strftime("%Y-%m-%d %H:%M:%S")
-                    if row["data_criacao"]
-                    else ""
-                )
-                st.markdown(
-                    f"<div class='bv-meta' style='margin-top:8px'><strong>Criado em:</strong> {data_txt}</div>",
-                    unsafe_allow_html=True,
-                )
-
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
                     render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
         else:
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
                 solicitacao_id = int(row["id"])
 
-                st.markdown("<div class='bv-demand-card'>", unsafe_allow_html=True)
+                with st.container(border=True):
+                    c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.4, 1.5])
 
-                top1, top2, top3 = st.columns([4.6, 1.6, 1.6])
+                    with c1:
+                        st.write(f"**#{solicitacao_id}**")
+                    with c2:
+                        st.write(f"**{row['titulo']}**")
+                        st.caption(row["descricao"])
+                    with c3:
+                        st.write(f"Prioridade: **{row['prioridade']}**")
+                    with c4:
+                        st.write(f"Status: **{formatar_status_texto(status_atual)}**")
+                    with c5:
+                        if row["complexidade"]:
+                            st.write(f"Complexidade: **{row['complexidade']}**")
 
-                with top1:
-                    st.markdown(
-                        f"<div class='bv-demand-id'>SOLICITAÇÃO #{solicitacao_id}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        f"<div class='bv-demand-title'>{row['titulo']}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        f"<div class='bv-demand-desc'>{row['descricao']}</div>",
-                        unsafe_allow_html=True,
-                    )
+                    with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
+                        render_anexos_como_arquivo(
+                            solicitacao_id, prefixo=f"admin_{solicitacao_id}"
+                        )
 
-                with top2:
-                    st.markdown(
-                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Prioridade</strong></div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        render_prioridade_badge(row["prioridade"]),
-                        unsafe_allow_html=True,
-                    )
+                    obs_key = f"obs_{solicitacao_id}"
+                    if obs_key not in st.session_state:
+                        st.session_state[obs_key] = (
+                            row["resposta"] if row["resposta"] else ""
+                        )
 
-                with top3:
-                    st.markdown(
-                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Status</strong></div>",
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        render_status_badge(status_atual),
-                        unsafe_allow_html=True,
+                    st.text_area(
+                        "Observações",
+                        key=obs_key,
+                        height=90,
+                        placeholder="Digite aqui a observação para o cliente...",
                     )
 
-                if row["complexidade"]:
-                    st.markdown(
-                        f"<div class='bv-meta' style='margin-top:4px'><strong>Complexidade:</strong> {row['complexidade']}</div>",
-                        unsafe_allow_html=True,
-                    )
+                    ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1, 3.6])
 
-                with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
-                    render_anexos_como_arquivo(
-                        solicitacao_id, prefixo=f"admin_{solicitacao_id}"
-                    )
+                    if status_atual == "Em análise":
+                        with ac1:
+                            if st.button(
+                                "INICIAR",
+                                key=f"iniciar_{solicitacao_id}",
+                                use_container_width=True,
+                            ):
+                                atualizar_solicitacao(
+                                    solicitacao_id,
+                                    "Em atendimento",
+                                    st.session_state[obs_key],
+                                )
+                                st.rerun()
 
-                obs_key = f"obs_{solicitacao_id}"
-                if obs_key not in st.session_state:
-                    st.session_state[obs_key] = (
-                        row["resposta"] if row["resposta"] else ""
-                    )
+                    elif status_atual == "Em atendimento":
+                        with ac1:
+                            if st.button(
+                                "AGUARDAR CLIENTE",
+                                key=f"aguardar_{solicitacao_id}",
+                                use_container_width=True,
+                            ):
+                                atualizar_solicitacao(
+                                    solicitacao_id,
+                                    "Aguardando cliente",
+                                    st.session_state[obs_key],
+                                )
+                                st.rerun()
+                        with ac2:
+                            if st.button(
+                                "FINALIZAR",
+                                key=f"finalizar_{solicitacao_id}",
+                                use_container_width=True,
+                            ):
+                                atualizar_solicitacao(
+                                    solicitacao_id,
+                                    "Concluído",
+                                    st.session_state[obs_key],
+                                )
+                                st.rerun()
 
-                st.text_area(
-                    "Observações",
-                    key=obs_key,
-                    height=100,
-                    placeholder="Digite aqui a observação para o cliente...",
-                )
+                    elif status_atual == "Aguardando cliente":
+                        with ac1:
+                            if st.button(
+                                "RETOMAR",
+                                key=f"retomar_{solicitacao_id}",
+                                use_container_width=True,
+                            ):
+                                atualizar_solicitacao(
+                                    solicitacao_id,
+                                    "Em atendimento",
+                                    st.session_state[obs_key],
+                                )
+                                st.rerun()
+                        with ac2:
+                            if st.button(
+                                "FINALIZAR",
+                                key=f"finalizar_aguardando_{solicitacao_id}",
+                                use_container_width=True,
+                            ):
+                                atualizar_solicitacao(
+                                    solicitacao_id,
+                                    "Concluído",
+                                    st.session_state[obs_key],
+                                )
+                                st.rerun()
+                    else:
+                        st.success("Demanda concluída.")
 
-                ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1.2, 3.4])
-
-                if status_atual == "Em análise":
-                    with ac1:
-                        if st.button(
-                            "Iniciar",
-                            key=f"iniciar_{solicitacao_id}",
-                            use_container_width=True,
-                        ):
-                            atualizar_solicitacao(
-                                solicitacao_id,
-                                "Em atendimento",
-                                st.session_state[obs_key],
-                            )
-                            st.rerun()
-
-                elif status_atual == "Em atendimento":
-                    with ac1:
-                        if st.button(
-                            "Aguardar cliente",
-                            key=f"aguardar_{solicitacao_id}",
-                            use_container_width=True,
-                        ):
-                            atualizar_solicitacao(
-                                solicitacao_id,
-                                "Aguardando cliente",
-                                st.session_state[obs_key],
-                            )
-                            st.rerun()
-                    with ac2:
-                        if st.button(
-                            "Finalizar",
-                            key=f"finalizar_{solicitacao_id}",
-                            use_container_width=True,
-                        ):
-                            atualizar_solicitacao(
-                                solicitacao_id,
-                                "Concluído",
-                                st.session_state[obs_key],
-                            )
-                            st.rerun()
-
-                elif status_atual == "Aguardando cliente":
-                    with ac1:
-                        if st.button(
-                            "Retomar",
-                            key=f"retomar_{solicitacao_id}",
-                            use_container_width=True,
-                        ):
-                            atualizar_solicitacao(
-                                solicitacao_id,
-                                "Em atendimento",
-                                st.session_state[obs_key],
-                            )
-                            st.rerun()
-                    with ac2:
-                        if st.button(
-                            "Finalizar",
-                            key=f"finalizar_aguardando_{solicitacao_id}",
-                            use_container_width=True,
-                        ):
-                            atualizar_solicitacao(
-                                solicitacao_id,
-                                "Concluído",
-                                st.session_state[obs_key],
-                            )
-                            st.rerun()
-                else:
-                    st.success("Demanda concluída.")
-
-                meta1, meta2, meta3 = st.columns(3)
-                with meta1:
-                    st.markdown(
-                        f"<div class='bv-meta'><strong>Criado em:</strong> {row['data_criacao'].strftime('%Y-%m-%d %H:%M:%S') if row['data_criacao'] else ''}</div>",
-                        unsafe_allow_html=True,
-                    )
-                with meta2:
-                    st.markdown(
-                        f"<div class='bv-meta'><strong>Início:</strong> {row['inicio_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['inicio_atendimento'] else ''}</div>",
-                        unsafe_allow_html=True,
-                    )
-                with meta3:
-                    st.markdown(
-                        f"<div class='bv-meta'><strong>Fim:</strong> {row['fim_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['fim_atendimento'] else ''}</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                st.markdown("</div>", unsafe_allow_html=True)
+                    meta1, meta2, meta3 = st.columns(3)
+                    with meta1:
+                        st.caption(
+                            f"Criado em: {row['data_criacao'].strftime('%Y-%m-%d %H:%M:%S') if row['data_criacao'] else ''}"
+                        )
+                    with meta2:
+                        st.caption(
+                            f"Início: {row['inicio_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['inicio_atendimento'] else ''}"
+                        )
+                    with meta3:
+                        st.caption(
+                            f"Fim: {row['fim_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['fim_atendimento'] else ''}"
+                        )
 
     if not encontrou_resultado:
         st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
@@ -2086,51 +1749,8 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                     st.write(f"CPF: {cli['cpf'] or ''}")
 
                 with col4:
-                    status_cliente = "Ativo" if bool(cli["ativo"]) else "Inativo"
-
-                    style_status = {
-                        "Ativo": {
-                            "bg": "#ECFDF3",
-                            "border": "#CDEAD8",
-                            "text": "#027A48",
-                            "dot": "#12B76A",
-                        },
-                        "Inativo": {
-                            "bg": "#FEF3F2",
-                            "border": "#F3C7C2",
-                            "text": "#B42318",
-                            "dot": "#F04438",
-                        },
-                    }
-
-                    s = style_status[status_cliente]
-
-                    st.markdown(
-                        f"""
-                        <div style="
-                            display:inline-flex;
-                            align-items:center;
-                            gap:8px;
-                            padding:6px 10px;
-                            border-radius:999px;
-                            background:{s['bg']};
-                            border:1px solid {s['border']};
-                            color:{s['text']};
-                            font-size:12px;
-                            font-weight:700;
-                        ">
-                            <span style="
-                                width:8px;
-                                height:8px;
-                                border-radius:50%;
-                                background:{s['dot']};
-                                display:inline-block;
-                            "></span>
-                            {status_cliente}
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    status_cliente = "🟢 Ativo" if bool(cli["ativo"]) else "🔴 Inativo"
+                    st.write(status_cliente)
 
                 with col5:
                     b1, b2, b3 = st.columns(3)
