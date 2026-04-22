@@ -160,99 +160,86 @@ def email_configurada():
 
 def enviar_email_convite(destinatario, nome, link):
     cfg = obter_email_config()
+
     if not all(
         [cfg["host"], cfg["port"], cfg["user"], cfg["password"], cfg["from_email"]]
     ):
         return False, "Configuração de e-mail não encontrada em st.secrets['email']."
 
     assunto = "Convite - Portal Business Vision"
+
     html_body = f"""
-<html>
-  <body style="margin:0; padding:0; background:#0B1E33; font-family:Arial, sans-serif;">
+    <html>
+      <body style="margin:0; padding:0; background:#0B1E33; font-family:Arial, sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#0B1E33; padding:20px;">
+          <tr>
+            <td align="center">
+              <table width="500" cellpadding="0" cellspacing="0" style="background:#0F2744; border-radius:10px; padding:30px;">
 
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0B1E33; padding:20px;">
-      <tr>
-        <td align="center">
+                <tr>
+                  <td align="center" style="padding-bottom:20px;">
+                    <img src="https://raw.githubusercontent.com/miltonrubens123-cmd/portal-businessvision/main/app/imagens/logo.png" width="120" />
+                  </td>
+                </tr>
 
-          <table width="500" cellpadding="0" cellspacing="0" style="background:#0F2744; border-radius:10px; padding:30px;">
+                <tr>
+                  <td style="color:#ffffff; font-size:20px; text-align:center;">
+                    Convite para acesso ao portal
+                  </td>
+                </tr>
 
-            <!-- LOGO -->
-            <tr>
-              <td align="center" style="padding-bottom:20px;">
-                <img src="https://raw.githubusercontent.com/miltonrubens123-cmd/portal-businessvision/main/app/imagens/logo.png" width="120" style="display:block;" />
-              </td>
-            </tr>
+                <tr>
+                  <td style="color:#cfe3ff; font-size:14px; text-align:center;">
+                    Olá, {nome}.<br><br>
+                    Você recebeu um convite para concluir seu cadastro.
+                  </td>
+                </tr>
 
-            <!-- TÍTULO -->
-            <tr>
-              <td style="color:#ffffff; font-size:20px; text-align:center; padding-bottom:10px;">
-                Convite para acesso ao portal
-              </td>
-            </tr>
+                <tr>
+                  <td align="center" style="padding:25px 0;">
+                    <a href="{link}"
+                       style="background:#17427A;color:#fff;padding:14px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">
+                       Concluir cadastro
+                    </a>
+                  </td>
+                </tr>
 
-            <!-- TEXTO -->
-            <tr>
-              <td style="color:#cfe3ff; font-size:14px; text-align:center;">
-                Olá, {nome}.
-                <br><br>
-                Você recebeu um convite para concluir seu cadastro no portal Business Vision.
-              </td>
-            </tr>
+                <tr>
+                  <td style="color:#8fb3ff; font-size:12px; text-align:center;">
+                    Link direto:<br>
+                    <span style="word-break:break-all;">{link}</span>
+                  </td>
+                </tr>
 
-            <!-- BOTÃO -->
-            <tr>
-              <td align="center" style="padding:25px 0;">
-                <a href="{link}" 
-                   style="
-                    background:#17427A;
-                    color:#ffffff;
-                    padding:14px 24px;
-                    text-decoration:none;
-                    border-radius:6px;
-                    font-weight:bold;
-                    display:inline-block;
-                   ">
-                   Concluir cadastro
-                </a>
-              </td>
-            </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
 
-            <!-- LINK -->
-            <tr>
-              <td style="color:#8fb3ff; font-size:12px; text-align:center;">
-                Caso o botão não funcione, copie o link abaixo:
-                <br><br>
-                <span style="word-break:break-all;">{link}</span>
-              </td>
-            </tr>
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = assunto
+    msg["From"] = f'{cfg["from_name"]} <{cfg["from_email"]}>'
+    msg["To"] = destinatario
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-            <!-- DIVIDER -->
-            <tr>
-              <td style="padding:25px 0;">
-                <hr style="border:0; border-top:1px solid #1f3b5c;">
-              </td>
-            </tr>
+    try:
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(cfg["user"], cfg["password"])
+            server.sendmail(cfg["user"], [destinatario], msg.as_string())
 
-            <!-- ASSINATURA -->
-            <tr>
-              <td style="text-align:center; color:#7ea6d9; font-size:12px;">
-                Business Vision<br>
-                Plataforma de gestão de demandas<br><br>
+        return True, "E-mail enviado com sucesso."
 
-                Este e-mail foi enviado automaticamente.<br>
-                Caso não reconheça, ignore esta mensagem.
-              </td>
-            </tr>
+    except smtplib.SMTPAuthenticationError as exc:
+        return False, f"Falha SMTP (credenciais inválidas). Detalhe: {exc}"
 
-          </table>
-
-        </td>
-      </tr>
-    </table>
-
-  </body>
-</html>
-"""
+    except Exception as exc:
+        return False, f"Falha ao enviar e-mail: {exc}"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = assunto
@@ -1063,15 +1050,13 @@ def agrupar_solicitacoes_por_cliente(solicitacoes):
 
 
 def montar_url_convite(token_convite):
-    base_url = (
-        st.secrets.get("APP_BASE_URL") or os.getenv("APP_BASE_URL", "") or ""
-    ).strip()
+    base_url = obter_app_base_url()
 
     if not base_url:
         return f"?invite={quote_plus(token_convite)}"
 
-    separador = "&" if "?" in base_url else "?"
-    return f"{base_url.rstrip('/')}{separador}invite={quote_plus(token_convite)}"
+    base_url = base_url.strip().rstrip("/")
+    return f"{base_url}/?invite={quote_plus(token_convite)}"
 
 
 def gerar_token_convite():
