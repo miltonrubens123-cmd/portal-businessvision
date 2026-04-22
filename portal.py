@@ -6,10 +6,7 @@ import hmac
 import html
 import re
 import secrets
-import smtplib
 import uuid
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -21,6 +18,9 @@ import streamlit as st
 from PIL import Image
 from psycopg.rows import dict_row
 from zoneinfo import ZoneInfo
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 
 @st.cache_resource
@@ -130,72 +130,6 @@ def obter_secret(path, default=None):
         return cursor
     except Exception:
         return default
-
-
-def obter_app_base_url():
-    return (
-        obter_secret(["APP_BASE_URL"])
-        or os.getenv("APP_BASE_URL")
-        or ""
-    ).strip()
-
-
-def obter_email_config():
-    cfg = obter_secret(["email"], {}) or {}
-    return {
-        "host": (cfg.get("host") or os.getenv("SMTP_HOST") or "").strip(),
-        "port": int(cfg.get("port") or os.getenv("SMTP_PORT") or 587),
-        "user": (cfg.get("user") or os.getenv("SMTP_USER") or "").strip(),
-        "password": (cfg.get("password") or os.getenv("SMTP_PASSWORD") or "").strip(),
-        "from_name": (cfg.get("from_name") or os.getenv("SMTP_FROM_NAME") or "Business Vision").strip(),
-        "from_email": (cfg.get("from_email") or os.getenv("SMTP_FROM_EMAIL") or "").strip(),
-    }
-
-
-def email_configurada():
-    cfg = obter_email_config()
-    return all([cfg["host"], cfg["port"], cfg["user"], cfg["password"], cfg["from_email"]])
-
-
-def enviar_email_convite(destinatario, nome, link):
-    cfg = obter_email_config()
-    if not all([cfg["host"], cfg["port"], cfg["user"], cfg["password"], cfg["from_email"]]):
-        return False, "Configuração de e-mail não encontrada em st.secrets['email']."
-
-    assunto = "Convite - Portal Business Vision"
-    html_body = f"""
-    <html>
-        <body style="font-family: Arial, Helvetica, sans-serif; background:#0B1E33; color:#EAF2FF; padding:24px;">
-            <div style="max-width:640px; margin:0 auto; background:#102742; border-radius:14px; padding:28px;">
-                <h2 style="margin:0 0 12px 0; color:#FFFFFF;">Business Vision</h2>
-                <p style="margin:0 0 12px 0;">Olá, {html.escape(nome)}.</p>
-                <p style="margin:0 0 18px 0;">Você recebeu um convite para concluir seu cadastro no portal.</p>
-                <p style="margin:0 0 22px 0;">
-                    <a href="{html.escape(link, quote=True)}" style="display:inline-block; padding:12px 20px; background:#17427A; color:#FFFFFF; text-decoration:none; border-radius:8px; font-weight:700;">
-                        Concluir cadastro
-                    </a>
-                </p>
-                <p style="margin:0 0 8px 0; font-size:13px; color:#C7D7E6;">Se o botão não funcionar, copie o link abaixo no navegador:</p>
-                <p style="margin:0; font-size:13px; word-break:break-all; color:#FFFFFF;">{html.escape(link)}</p>
-            </div>
-        </body>
-    </html>
-    """
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = assunto
-    msg["From"] = f'{cfg["from_name"]} <{cfg["from_email"]}>'
-    msg["To"] = destinatario
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
-            server.starttls()
-            server.login(cfg["user"], cfg["password"])
-            server.sendmail(cfg["from_email"], [destinatario], msg.as_string())
-        return True, "E-mail enviado com sucesso."
-    except Exception as exc:
-        return False, f"Falha ao enviar e-mail: {exc}"
 
 
 def obter_admin_config():
@@ -696,6 +630,54 @@ def nova_solicitacao():
     st.session_state.limpar_campos_nova_solicitacao = False
     st.rerun()
 
+def enviar_email_convite(destinatario, nome, link):
+    try:
+        cfg = st.secrets["email"]
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Convite - Portal Business Vision"
+        msg["From"] = f"{cfg['from_name']} <{cfg['from_email']}>"
+        msg["To"] = destinatario
+
+        html = f"""
+        <html>
+            <body style="font-family: Arial; background:#0B1E33; color:#EAF2FF; padding:20px;">
+                <h2>Business Vision</h2>
+                <p>Olá, {nome}.</p>
+                <p>Você recebeu um convite para acessar o portal.</p>
+
+                <a href="{link}" style="
+                    display:inline-block;
+                    padding:12px 20px;
+                    background:#17427A;
+                    color:#fff;
+                    text-decoration:none;
+                    border-radius:8px;
+                    margin-top:10px;
+                ">
+                    Concluir cadastro
+                </a>
+
+                <p style="margin-top:20px; font-size:12px;">
+                    Caso não funcione, copie o link abaixo:<br>
+                    {link}
+                </p>
+            </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP(cfg["host"], cfg["port"]) as server:
+            server.starttls()
+            server.login(cfg["user"], cfg["password"])
+            server.sendmail(cfg["from_email"], destinatario, msg.as_string())
+
+        return True
+
+    except Exception as e:
+        print("Erro envio email:", e)
+        return False
 
 def paginar_registros(registros, state_key, page_size=12):
     total = len(registros or [])
@@ -986,7 +968,7 @@ def agrupar_solicitacoes_por_cliente(solicitacoes):
 
 
 def montar_url_convite(token_convite):
-    base_url = obter_app_base_url()
+    base_url = os.getenv("APP_BASE_URL", "").strip()
     if not base_url:
         try:
             qp = st.query_params.to_dict()
@@ -1070,41 +1052,10 @@ def criar_convite(nome, email, empresa_id, tipo_usuario, observacao=""):
             expiracao_em,
         ),
     ).fetchone()
-
-    link_convite = montar_url_convite(token)
-    email_enviado = False
-    email_msg = "Configuração de e-mail não encontrada. O convite foi criado apenas com link manual."
-
-    if email_configurada():
-        email_enviado, email_msg = enviar_email_convite(
-            destinatario=email.strip().lower(),
-            nome=nome.strip(),
-            link=link_convite,
-        )
-
-    return {
-        "id": convite["id"],
-        "token": token,
-        "link": link_convite,
-        "email_enviado": email_enviado,
-        "email_msg": email_msg,
-    }
+    return convite["id"], token
 
 
 def reenviar_convite(convite_id):
-    convite = conn.execute(
-        """
-        SELECT id, nome, email
-        FROM convites_cadastro
-        WHERE id = %s
-        LIMIT 1
-        """,
-        (convite_id,),
-    ).fetchone()
-
-    if not convite:
-        raise ValueError("Convite não encontrado.")
-
     token = gerar_token_convite()
     enviado_em = agora()
     expiracao_em = agora() + timedelta(hours=CONVITE_EXPIRACAO_HORAS)
@@ -1120,24 +1071,7 @@ def reenviar_convite(convite_id):
         """,
         (token, enviado_em, expiracao_em, convite_id),
     )
-
-    link_convite = montar_url_convite(token)
-    email_enviado = False
-    email_msg = "Configuração de e-mail não encontrada. O convite foi renovado apenas com link manual."
-
-    if email_configurada():
-        email_enviado, email_msg = enviar_email_convite(
-            destinatario=convite["email"],
-            nome=convite["nome"],
-            link=link_convite,
-        )
-
-    return {
-        "token": token,
-        "link": link_convite,
-        "email_enviado": email_enviado,
-        "email_msg": email_msg,
-    }
+    return token
 
 
 def concluir_convite(convite, nome, usuario, senha, cpf="", funcao="", email="", nome_atendente=""):
@@ -2516,18 +2450,15 @@ elif menu == "Painel de Cadastros" and perfil_atual == "admin":
             elif tipo_convite == "cliente" and not empresa_id_convite:
                 st.error("Selecione a empresa do cliente.")
             else:
-                resultado_convite = criar_convite(
+                convite_id, token = criar_convite(
                     nome=nome_convite,
                     email=email_convite,
                     empresa_id=empresa_id_convite,
                     tipo_usuario=tipo_convite,
                     observacao=obs_convite,
                 )
-                link = resultado_convite["link"]
-                if resultado_convite["email_enviado"]:
-                    st.success("Convite criado e enviado por e-mail com sucesso.")
-                else:
-                    st.warning(f"Convite criado, mas o e-mail não foi enviado. Motivo: {resultado_convite['email_msg']}")
+                link = montar_url_convite(token)
+                st.success("Convite criado com sucesso.")
                 st.code(link, language="text")
                 st.session_state["ultimo_link_convite"] = link
 
@@ -2568,12 +2499,9 @@ elif menu == "Painel de Cadastros" and perfil_atual == "admin":
                         a1, a2, a3 = st.columns(3)
                         with a1:
                             if st.button("Reenviar", key=f"reenviar_convite_{convite['id']}", use_container_width=True):
-                                resultado_reenvio = reenviar_convite(convite["id"])
-                                st.session_state[f"link_convite_{convite['id']}"] = resultado_reenvio["link"]
-                                if resultado_reenvio["email_enviado"]:
-                                    st.success("Convite reenviado por e-mail com novo link.")
-                                else:
-                                    st.warning(f"Convite renovado com novo link, mas o e-mail não foi enviado. Motivo: {resultado_reenvio['email_msg']}")
+                                novo_token = reenviar_convite(convite["id"])
+                                st.session_state[f"link_convite_{convite['id']}"] = montar_url_convite(novo_token)
+                                st.success("Convite renovado com novo link.")
                                 st.rerun()
                         with a2:
                             if st.button("Cancelar", key=f"cancelar_convite_{convite['id']}", use_container_width=True):
