@@ -1194,18 +1194,17 @@ menu_options = (
     else menu_options_cliente
 )
 
-# garante valor inicial
 if "menu_atual" not in st.session_state:
     st.session_state.menu_atual = menu_options[0]
 
 st.sidebar.markdown("### Menu")
 
-# ícones simples (sem HTML complexo)
+# ícones neutros (sem emoji)
 menu_icons = {
-    "Nova Solicitação": "➕",
-    "Demandas Solicitadas": "📋",
-    "Dashboard": "📊",
-    "Cadastro de Clientes": "👥",
+    "Nova Solicitação": "＋",
+    "Demandas Solicitadas": "▣",
+    "Dashboard": "▤",
+    "Cadastro de Clientes": "◉",
 }
 
 for item in menu_options:
@@ -1223,7 +1222,6 @@ for item in menu_options:
         atualizar_menu_sessao(st.session_state.get("token_sessao"), item)
         st.rerun()
 
-# sincroniza variável final
 menu = st.session_state.menu_atual
 persistir_query_params()
 
@@ -1232,12 +1230,48 @@ st.sidebar.markdown("---")
 # ----------------------------
 # USUÁRIO
 # ----------------------------
-st.sidebar.markdown("**Usuário atual**")
-st.sidebar.write(st.session_state.usuario)
+st.sidebar.markdown("---")
 
-if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
+iniciais = st.session_state.usuario[:2].upper()
+
+st.sidebar.markdown(
+    f"""
+    <div style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin-top:10px;
+        margin-bottom:10px;
+    ">
+        <div style="
+            width:38px;
+            height:38px;
+            border-radius:50%;
+            background:#1D4ED8;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:700;
+            color:white;
+        ">
+            {iniciais}
+        </div>
+
+        <div>
+            <div style="font-size:12px;color:#8FA5BC;">
+                Usuário atual
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
+                {st.session_state.usuario}
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+if st.sidebar.button("Trocar usuário", use_container_width=True):
     logout()
-
 # ----------------------------
 # NOVA SOLICITAÇÃO
 # ----------------------------
