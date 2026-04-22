@@ -1052,7 +1052,6 @@ def aplicar_estilo_app():
 # APP LOGADO
 # ----------------------------
 
-aplicar_estilo_app()
 header_logo_col, header_title_col = st.columns([0.8, 8])
 
 with header_logo_col:
