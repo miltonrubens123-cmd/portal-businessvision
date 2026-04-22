@@ -7,6 +7,7 @@ import secrets
 import uuid
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
@@ -115,7 +116,9 @@ def obter_secret(path, default=None):
 
 def obter_admin_config():
     admin_user = (
-        obter_secret(["admin", "user"]) or os.getenv("ADMIN_USER") or ""
+        obter_secret(["admin", "user"])
+        or os.getenv("ADMIN_USER")
+        or ""
     ).strip()
 
     admin_password_hash = (
@@ -125,7 +128,9 @@ def obter_admin_config():
     ).strip()
 
     admin_password_plain = (
-        obter_secret(["admin", "password"]) or os.getenv("ADMIN_PASSWORD") or ""
+        obter_secret(["admin", "password"])
+        or os.getenv("ADMIN_PASSWORD")
+        or ""
     ).strip()
 
     return {
@@ -243,6 +248,7 @@ def validar_upload_imagem(arquivo):
 
 admin_config = obter_admin_config()
 admin_user = admin_config["user"]
+
 
 
 # ----------------------------
@@ -585,7 +591,6 @@ def formatar_status_texto(status):
     }
     return status_map.get(status, status)
 
-
 def obter_atendentes_ativos():
     return conn.execute(
         """
@@ -728,9 +733,7 @@ def obter_solicitacoes_filtradas(
     params = []
 
     if cliente_id is not None:
-        filtros.append(
-            "(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.s.cliente = %s))"
-        )
+        filtros.append("(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.cliente = %s))")
         params.extend([cliente_id, cliente_usuario or ""])
     elif empresa_id is not None:
         filtros.append("s.empresa_id = %s")
@@ -760,7 +763,7 @@ def obter_solicitacoes_filtradas(
     busca = (busca or "").strip()
     if busca:
         if busca.isdigit():
-            filtros.append("(CAST(s.id AS TEXT) = %s OR s.s.titulo ILIKE %s)")
+            filtros.append("(CAST(s.id AS TEXT) = %s OR s.titulo ILIKE %s)")
             params.append(busca)
             params.append(f"%{busca}%")
         else:
@@ -923,9 +926,233 @@ if not st.session_state.logado:
     st.stop()
 
 
+
+def aplicar_design_portal():
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background: linear-gradient(180deg, #020b16 0%, #04111f 100%);
+            color: #EAF2FF;
+        }
+
+        [data-testid="stHeader"] { background: transparent; }
+        .block-container {
+            padding-top: 1.15rem;
+            padding-bottom: 1.8rem;
+            max-width: 1380px;
+        }
+
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #03101d 0%, #051424 100%);
+            border-right: 1px solid rgba(120,145,170,0.12);
+            min-width: 290px !important;
+            max-width: 290px !important;
+        }
+
+        section[data-testid="stSidebar"] * { color: #EAF2FF !important; }
+        section[data-testid="stSidebar"] button[kind="header"] { display: none !important; }
+
+        .stTextInput > div > div > input,
+        .stTextArea textarea,
+        .stSelectbox > div > div,
+        .stNumberInput input {
+            background: rgba(255,255,255,0.03) !important;
+            color: #EAF2FF !important;
+            border: 1px solid rgba(120,145,170,0.18) !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+        }
+
+        .stButton > button {
+            width: 100%;
+            border-radius: 12px;
+            font-weight: 700;
+            border: 1px solid rgba(84,138,226,0.28);
+            background: linear-gradient(180deg, #17427A 0%, #10335F 100%);
+            color: #FFFFFF;
+            box-shadow: none;
+        }
+
+        .stButton > button:hover {
+            background: linear-gradient(180deg, #1C4C8E 0%, #123B6C 100%);
+            border: 1px solid rgba(110,164,255,0.34);
+        }
+
+        h1, h2, h3 { color: #F7FBFF !important; }
+        p, label, .stCaption, .stMarkdown, .stText { color: #9FB2C8 !important; }
+        strong, b { color: #F7FBFF !important; }
+        hr { border-color: rgba(120,145,170,0.12) !important; }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: transparent !important;
+            border: 1px solid rgba(120,145,170,0.12) !important;
+            box-shadow: none !important;
+            border-radius: 14px !important;
+        }
+
+        details {
+            background: rgba(255,255,255,0.02) !important;
+            border: 1px solid rgba(120,145,170,0.14) !important;
+            border-radius: 12px !important;
+        }
+
+        .bv-sidebar-top {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin: 4px 0 18px 0;
+        }
+        .bv-sidebar-logo {
+            width:34px;
+            height:34px;
+            flex-shrink:0;
+        }
+        .bv-sidebar-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #F7FBFF;
+            line-height: 1.2;
+        }
+        .bv-menu-heading {
+            font-size: 11px;
+            letter-spacing: .08em;
+            font-weight: 700;
+            color: #7F93A8;
+            margin: 8px 0 10px 0;
+            text-transform: uppercase;
+        }
+        .bv-menu-link {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            text-decoration:none;
+            color:#B9C8D9;
+            border-radius:12px;
+            padding: 11px 12px;
+            margin: 0 0 8px 0;
+            border: 1px solid transparent;
+            transition: all .12s ease-in-out;
+        }
+        .bv-menu-link:hover {
+            background: rgba(255,255,255,0.03);
+            border-color: rgba(120,145,170,0.14);
+            color:#F3F8FF;
+        }
+        .bv-menu-link.active {
+            background: rgba(38,79,150,0.72);
+            color: #FFFFFF;
+            border-color: rgba(120,166,255,0.15);
+        }
+        .bv-menu-icon {
+            width:20px;
+            height:20px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color: currentColor;
+            flex-shrink:0;
+            opacity: .95;
+        }
+        .bv-menu-text {
+            font-size: 14px;
+            font-weight: 600;
+            line-height:1;
+        }
+        .bv-sidebar-divider {
+            height:1px;
+            background: rgba(120,145,170,0.16);
+            margin: 16px 0 18px 0;
+        }
+        .bv-user-card {
+            display:flex;
+            align-items:center;
+            gap:12px;
+            margin-top: 14px;
+            margin-bottom: 12px;
+        }
+        .bv-user-avatar {
+            width:44px;
+            height:44px;
+            border-radius:50%;
+            background:#2B59C3;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#FFFFFF;
+            font-weight:700;
+            font-size:17px;
+            flex-shrink:0;
+        }
+        .bv-user-meta {
+            min-width:0;
+        }
+        .bv-user-label {
+            font-size:12px;
+            color:#8FA5BC;
+            line-height:1.2;
+        }
+        .bv-user-name {
+            font-size:15px;
+            font-weight:700;
+            color:#EAF2FF;
+            line-height:1.3;
+            word-break: break-word;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def svg_menu_icon(kind):
+    icons = {
+        "dashboard": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.2" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.2" stroke="currentColor" stroke-width="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2" stroke="currentColor" stroke-width="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2" stroke="currentColor" stroke-width="1.8"/></svg>',
+        "demandas": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="3.5" width="14" height="17" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="8" x2="16" y2="8" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
+        "nova": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+        "clientes": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3.2 2.9-5.3 6-5.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M21 19c0-3.2-2.9-5.3-6-5.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+        "atendentes": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 19c0-3.6 3.3-5.8 7-5.8s7 2.2 7 5.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+        "swap": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 7H19M19 7L15.5 3.5M19 7L15.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17H5M5 17L8.5 13.5M5 17L8.5 20.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    }
+    return icons.get(kind, icons["demandas"])
+
+
+def render_sidebar_menu(menu_options, current_menu, token, logo_b64):
+    icon_map = {
+        "Dashboard": "dashboard",
+        "Demandas Solicitadas": "demandas",
+        "Nova Solicitação": "nova",
+        "Cadastro de Clientes": "clientes",
+        "Cadastro de Atendentes": "atendentes",
+    }
+    parts = []
+    if logo_b64:
+        parts.append(
+            f'''
+            <div class="bv-sidebar-top">
+                <img class="bv-sidebar-logo" src="data:image/png;base64,{logo_b64}">
+                <div class="bv-sidebar-title">Portal Business Vision</div>
+            </div>
+            '''
+        )
+    parts.append('<div class="bv-menu-heading">Menu</div>')
+    for item in menu_options:
+        active = "active" if item == current_menu else ""
+        href = f"?token={quote(token or '')}&menu={quote(item)}" if token else f"?menu={quote(item)}"
+        parts.append(
+            f'''
+            <a class="bv-menu-link {active}" href="{href}">
+                <span class="bv-menu-icon">{svg_menu_icon(icon_map.get(item, "demandas"))}</span>
+                <span class="bv-menu-text">{item}</span>
+            </a>
+            '''
+        )
+    return "\n".join(parts)
+
 # ----------------------------
 # APP LOGADO
 # ----------------------------
+aplicar_design_portal()
 header_logo_col, header_title_col = st.columns([0.8, 8])
 
 with header_logo_col:
@@ -945,7 +1172,7 @@ with header_title_col:
         unsafe_allow_html=True,
     )
 
-st.markdown("<hr style='border:1px solid #333; margin-top:0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border:1px solid rgba(120,145,170,0.12); margin-top:0;'>", unsafe_allow_html=True)
 st.caption("Gestão de demandas e acompanhamento em tempo real")
 
 
@@ -957,6 +1184,7 @@ menu_options_admin = [
     "Demandas Solicitadas",
     "Dashboard",
     "Cadastro de Clientes",
+    "Cadastro de Atendentes",
 ]
 menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
 menu_options = (
@@ -965,65 +1193,52 @@ menu_options = (
     else menu_options_cliente
 )
 
-ICONS = {
-    "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#DCE7F5" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
-    "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#DCE7F5" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="#DCE7F5" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
-    "Dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
-    "Cadastro de Clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="#DCE7F5" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="#DCE7F5" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="#DCE7F5" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
-}
+selected_menu_qp = st.query_params.get("menu")
+if selected_menu_qp in menu_options:
+    st.session_state.menu_atual = selected_menu_qp
 
-st.sidebar.markdown(
-    """
-    <style>
-    section[data-testid="stSidebar"] button[kind="secondary"],
-    section[data-testid="stSidebar"] button[kind="primary"] {
-        text-align: left !important;
-        justify-content: flex-start !important;
-        border-radius: 12px !important;
-        min-height: 44px !important;
-        font-weight: 600 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+if st.session_state.get("menu_atual") not in menu_options:
+    st.session_state.menu_atual = menu_options[0]
 
-st.sidebar.markdown("### Menu")
-
-menu = st.session_state.get("menu_atual", "Nova Solicitação")
-if menu not in menu_options:
-    menu = menu_options[0]
-
-for nome in menu_options:
-    row = st.sidebar.container()
-    col_icon, col_btn = row.columns([0.18, 0.82], vertical_alignment="center")
-
-    with col_icon:
-        st.markdown(ICONS.get(nome, ""), unsafe_allow_html=True)
-
-    with col_btn:
-        label = nome
-        if nome == menu:
-            label = f"●  {nome}"
-        if st.button(label, key=f"menu_btn_{nome}", use_container_width=True):
-            menu = nome
-            st.session_state.menu_atual = nome
-            atualizar_menu_sessao(st.session_state.get("token_sessao"), nome)
-            persistir_query_params()
-            st.rerun()
-
-st.session_state.menu_atual = menu
+menu = st.session_state.menu_atual
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
-st.sidebar.markdown("---")
-st.sidebar.caption("Usuário atual")
-st.sidebar.write(f"**{st.session_state.usuario}**")
-st.sidebar.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown(
+        render_sidebar_menu(
+            menu_options=menu_options,
+            current_menu=menu,
+            token=st.session_state.get("token_sessao"),
+            logo_b64=logo_b64,
+        ),
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="bv-sidebar-divider"></div>', unsafe_allow_html=True)
 
-if st.sidebar.button("⇆ Trocar usuário", use_container_width=True):
-    logout()
+    iniciais = (st.session_state.usuario or "US")[:2].upper()
+    st.markdown(
+        f"""
+        <div class="bv-user-card">
+            <div class="bv-user-avatar">{iniciais}</div>
+            <div class="bv-user-meta">
+                <div class="bv-user-label">Usuário atual</div>
+                <div class="bv-user-name">{st.session_state.usuario}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
+    col_swap_i, col_swap_b = st.columns([0.18, 0.82])
+    with col_swap_i:
+        st.markdown(
+            f'<div style="display:flex;align-items:center;justify-content:center;height:38px;color:#DCE7F4;">{svg_menu_icon("swap")}</div>',
+            unsafe_allow_html=True,
+        )
+    with col_swap_b:
+        if st.button("Trocar usuário", key="trocar_usuario_menu", use_container_width=True):
+            logout()
 
 # ----------------------------
 # NOVA SOLICITAÇÃO
@@ -1055,9 +1270,7 @@ if menu == "Nova Solicitação":
     else:
         cliente_usuario = st.session_state.usuario
         cliente_info = obter_cliente_por_usuario(cliente_usuario)
-        st.text_input(
-            "Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True
-        )
+        st.text_input("Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True)
 
     titulo = st.text_input("Título", key="titulo")
     descricao = st.text_area("Descrição", key="descricao")
@@ -1211,7 +1424,7 @@ elif menu == "Demandas Solicitadas":
     col_legenda1, col_legenda2 = st.columns([8, 1])
 
     with col_legenda2:
-        if st.button("▤ Legenda", use_container_width=True):
+        if st.button("📌 Legenda", use_container_width=True):
             st.session_state.mostrar_legenda = not st.session_state.get(
                 "mostrar_legenda", False
             )
@@ -1230,13 +1443,7 @@ elif menu == "Demandas Solicitadas":
     with f1:
         status_filtro = st.selectbox(
             "Filtrar por status",
-            [
-                "Todos",
-                "Em análise",
-                "Em atendimento",
-                "Aguardando cliente",
-                "Concluído",
-            ],
+            ["Todos", "Em análise", "Em atendimento", "Aguardando cliente", "Concluído"],
             index=0,
             key="filtro_status_demandas",
         )
@@ -1254,9 +1461,7 @@ elif menu == "Demandas Solicitadas":
             key="busca_demandas",
         )
 
-    st.caption(
-        "Exibindo no máximo 50 registros por cliente para preservar performance."
-    )
+    st.caption("Exibindo no máximo 50 registros por cliente para preservar performance.")
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1316,7 +1521,9 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
-                    render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
+                    render_anexos_como_arquivo(
+                        anexo_id, prefixo=f"cliente_{anexo_id}"
+                    )
         else:
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
@@ -1362,8 +1569,7 @@ elif menu == "Demandas Solicitadas":
 
                     if atendentes_ativos:
                         opcoes_atendentes = {
-                            atendente["nome"]: atendente["id"]
-                            for atendente in atendentes_ativos
+                            atendente["nome"]: atendente["id"] for atendente in atendentes_ativos
                         }
                         nomes_atendentes = list(opcoes_atendentes.keys())
                         indice_atendente = 0
@@ -1747,8 +1953,33 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                     st.write(f"CPF: {cli['cpf'] or ''}")
 
                 with col4:
-                    status_cliente = "🟢 Ativo" if bool(cli["ativo"]) else "🔴 Inativo"
-                    st.write(status_cliente)
+                    status_cliente = "Ativo" if bool(cli["ativo"]) else "Inativo"
+                    style_status = {
+                        "Ativo": {"bg": "#ECFDF3", "border": "#CDEAD8", "text": "#027A48", "dot": "#12B76A"},
+                        "Inativo": {"bg": "#FEF3F2", "border": "#F3C7C2", "text": "#B42318", "dot": "#F04438"},
+                    }
+                    s = style_status[status_cliente]
+                    st.markdown(
+                        f"""
+                        <div style="
+                            display:inline-flex;
+                            align-items:center;
+                            gap:8px;
+                            padding:6px 10px;
+                            border-radius:999px;
+                            background:{s['bg']};
+                            border:1px solid {s['border']};
+                            color:{s['text']};
+                            font-size:12px;
+                            font-weight:700;
+                            white-space:nowrap;
+                        ">
+                            <span style="width:8px;height:8px;border-radius:50%;background:{s['dot']};display:inline-block;"></span>
+                            {status_cliente}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
                 with col5:
                     b1, b2, b3 = st.columns(3)
@@ -1781,7 +2012,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                             "Excluir", key=f"excluir_{id_cli}", use_container_width=True
                         ):
                             tem_solicitacao = conn.execute(
-                                "SELECT 1 FROM solicitacoes WHERE s.cliente = %s LIMIT 1",
+                                "SELECT 1 FROM solicitacoes WHERE cliente = %s LIMIT 1",
                                 (cli["usuario"],),
                             ).fetchone()
 
@@ -1887,7 +2118,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                         conn.execute(
                                             """
                                             UPDATE clientes
-                                            SET nome = %s, cpf = %s, usuario = %s, funcao = %s, s.empresa_id = %s, senha = %s
+                                            SET nome = %s, cpf = %s, usuario = %s, funcao = %s, empresa_id = %s, senha = %s
                                             WHERE id = %s
                                             """,
                                             (
@@ -1904,7 +2135,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                         conn.execute(
                                             """
                                             UPDATE clientes
-                                            SET nome = %s, cpf = %s, usuario = %s, funcao = %s, s.empresa_id = %s
+                                            SET nome = %s, cpf = %s, usuario = %s, funcao = %s, empresa_id = %s
                                             WHERE id = %s
                                             """,
                                             (
@@ -1918,7 +2149,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                                         )
 
                                     conn.execute(
-                                        "UPDATE solicitacoes SET s.cliente = %s WHERE s.cliente = %s",
+                                        "UPDATE solicitacoes SET cliente = %s WHERE cliente = %s",
                                         (novo_usuario.strip(), cli["usuario"]),
                                     )
                                     st.session_state.cliente_editando_id = None
@@ -1951,17 +2182,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
             key="novo_atendente_usuario",
         )
         email_atendente = st.text_input("E-mail", key="novo_atendente_email")
-        senha_atendente = st.text_input(
-            "Senha", type="password", key="novo_atendente_senha"
-        )
+        senha_atendente = st.text_input("Senha", type="password", key="novo_atendente_senha")
         ativo_atendente = st.checkbox("Ativo", value=True, key="novo_atendente_ativo")
 
         if st.button("Cadastrar Atendente"):
-            if (
-                not nome_atendente.strip()
-                or not usuario_atendente.strip()
-                or not senha_atendente.strip()
-            ):
+            if not nome_atendente.strip() or not usuario_atendente.strip() or not senha_atendente.strip():
                 st.error("Preencha nome, usuário e senha.")
             else:
                 existe = conn.execute(
@@ -2007,28 +2232,33 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
 
                 with col2:
                     st.write(atendente["email"] or "Sem e-mail")
-                    st.caption("🟢 Ativo" if bool(atendente["ativo"]) else "🔴 Inativo")
+                    status_atendente = "Ativo" if bool(atendente["ativo"]) else "Inativo"
+                    cor_dot = "#12B76A" if bool(atendente["ativo"]) else "#F04438"
+                    cor_txt = "#027A48" if bool(atendente["ativo"]) else "#B42318"
+                    bg_badge = "#ECFDF3" if bool(atendente["ativo"]) else "#FEF3F2"
+                    bd_badge = "#CDEAD8" if bool(atendente["ativo"]) else "#F3C7C2"
+                    st.markdown(
+                        f"""
+                        <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:{bg_badge};border:1px solid {bd_badge};color:{cor_txt};font-size:12px;font-weight:700;white-space:nowrap;">
+                            <span style="width:8px;height:8px;border-radius:50%;background:{cor_dot};display:inline-block;"></span>
+                            {status_atendente}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
                 with col3:
                     b1, b2, b3 = st.columns(3)
                     with b1:
                         if bool(atendente["ativo"]):
-                            if st.button(
-                                "Inativar",
-                                key=f"inativar_atendente_{atendente_id}",
-                                use_container_width=True,
-                            ):
+                            if st.button("Inativar", key=f"inativar_atendente_{atendente_id}", use_container_width=True):
                                 conn.execute(
                                     "UPDATE atendentes SET ativo = FALSE WHERE id = %s",
                                     (atendente_id,),
                                 )
                                 st.rerun()
                         else:
-                            if st.button(
-                                "Ativar",
-                                key=f"ativar_atendente_{atendente_id}",
-                                use_container_width=True,
-                            ):
+                            if st.button("Ativar", key=f"ativar_atendente_{atendente_id}", use_container_width=True):
                                 conn.execute(
                                     "UPDATE atendentes SET ativo = TRUE WHERE id = %s",
                                     (atendente_id,),
@@ -2036,20 +2266,14 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 st.rerun()
 
                     with b2:
-                        if st.button(
-                            "Excluir",
-                            key=f"excluir_atendente_{atendente_id}",
-                            use_container_width=True,
-                        ):
+                        if st.button("Excluir", key=f"excluir_atendente_{atendente_id}", use_container_width=True):
                             possui_vinculo = conn.execute(
                                 "SELECT 1 FROM solicitacoes WHERE atendente_id = %s LIMIT 1",
                                 (atendente_id,),
                             ).fetchone()
 
                             if possui_vinculo:
-                                st.warning(
-                                    "Este atendente já está vinculado a solicitações. Inative ao invés de excluir."
-                                )
+                                st.warning("Este atendente já está vinculado a solicitações. Inative ao invés de excluir.")
                             else:
                                 conn.execute(
                                     "DELETE FROM atendentes WHERE id = %s",
@@ -2059,11 +2283,7 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 st.rerun()
 
                     with b3:
-                        if st.button(
-                            "Alterar",
-                            key=f"alterar_atendente_{atendente_id}",
-                            use_container_width=True,
-                        ):
+                        if st.button("Alterar", key=f"alterar_atendente_{atendente_id}", use_container_width=True):
                             st.session_state.atendente_editando_id = atendente_id
                             st.rerun()
 
@@ -2096,11 +2316,7 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
 
                     a1, a2 = st.columns(2)
                     with a1:
-                        if st.button(
-                            "Salvar alteração",
-                            key=f"salvar_atendente_{atendente_id}",
-                            use_container_width=True,
-                        ):
+                        if st.button("Salvar alteração", key=f"salvar_atendente_{atendente_id}", use_container_width=True):
                             if not novo_nome_at.strip() or not novo_usuario_at.strip():
                                 st.error("Preencha nome e usuário.")
                             else:
@@ -2110,9 +2326,7 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 ).fetchone()
 
                                 if usuario_existente:
-                                    st.error(
-                                        "Já existe outro atendente com esse usuário."
-                                    )
+                                    st.error("Já existe outro atendente com esse usuário.")
                                 else:
                                     if nova_senha_at.strip():
                                         conn.execute(
@@ -2149,11 +2363,7 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                     st.rerun()
 
                     with a2:
-                        if st.button(
-                            "Cancelar alteração",
-                            key=f"cancelar_atendente_{atendente_id}",
-                            use_container_width=True,
-                        ):
+                        if st.button("Cancelar alteração", key=f"cancelar_atendente_{atendente_id}", use_container_width=True):
                             st.session_state.atendente_editando_id = None
                             st.rerun()
     else:
