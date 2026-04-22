@@ -867,69 +867,184 @@ if not st.session_state.logado:
 def aplicar_estilo_app():
     st.markdown(
         """
-    <style>
+        <style>
+        :root {
+            --bg: #071018;
+            --bg-soft: #0A1420;
+            --surface: #0D1722;
+            --surface-2: #101D2B;
+            --border: rgba(148, 163, 184, 0.10);
+            --border-strong: rgba(148, 163, 184, 0.16);
+            --text-main: #E8EEF5;
+            --text-soft: #9BAEC2;
+            --text-muted: #7E93A8;
+            --accent: #2F6FED;
+            --accent-hover: #255ED1;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+            --radius: 16px;
+        }
 
-    .stApp {
-        background: linear-gradient(180deg, #0B1220 0%, #0F1B2E 100%);
-    }
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(47,111,237,0.10), transparent 26%),
+                linear-gradient(180deg, var(--bg) 0%, #08131D 100%);
+            color: var(--text-main);
+        }
 
-    /* SIDEBAR */
-    section[data-testid="stSidebar"] {
-        background: #0A1628;
-        border-right: 1px solid #1E293B;
-    }
+        .block-container {
+            padding-top: 1.4rem;
+            padding-bottom: 2rem;
+            max-width: 1380px;
+        }
 
-    /* TEXTO SIDEBAR */
-    section[data-testid="stSidebar"] * {
-        color: #CBD5E1 !important;
-    }
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #08111C 0%, #091523 100%);
+            border-right: 1px solid rgba(148, 163, 184, 0.08);
+        }
 
-    /* CONTAINER PRINCIPAL */
-    .block-container {
-        padding-top: 2rem;
-    }
+        section[data-testid="stSidebar"] * {
+            color: var(--text-main) !important;
+        }
 
-    /* HEADERS */
-    h1, h2, h3 {
-        color: #E2E8F0;
-    }
+        section[data-testid="stSidebar"] .stSelectbox > div > div,
+        section[data-testid="stSidebar"] .stButton > button {
+            background: rgba(255,255,255,0.03) !important;
+        }
 
-    /* TEXTOS */
-    p, span, label {
-        color: #94A3B8;
-    }
+        h1, h2, h3 {
+            color: var(--text-main) !important;
+            letter-spacing: -0.02em;
+            font-weight: 700 !important;
+        }
 
-    /* CARDS (containers) */
-    div[data-testid="stVerticalBlock"] > div {
-        background: #111C2E;
-        border: 1px solid #1F2A3C;
-        border-radius: 12px;
-        padding: 16px;
-    }
+        p, label, .stCaption, .stMarkdown, .stText {
+            color: var(--text-soft) !important;
+        }
 
-    /* BOTÕES */
-    .stButton > button {
-        background: #1D4ED8;
-        color: white;
-        border-radius: 10px;
-        font-weight: 600;
-        border: none;
-    }
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
 
-    .stButton > button:hover {
-        background: #1E40AF;
-    }
+        hr {
+            border-color: rgba(148, 163, 184, 0.08) !important;
+        }
 
-    /* INPUTS */
-    .stTextInput input, .stTextArea textarea, .stSelectbox div {
-        background: #0F172A !important;
-        color: #E2E8F0 !important;
-        border: 1px solid #1F2A3C !important;
-        border-radius: 8px !important;
-    }
+        /* Inputs */
+        .stTextInput > div > div > input,
+        .stTextArea textarea,
+        .stNumberInput input {
+            background: rgba(255,255,255,0.02) !important;
+            color: var(--text-main) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+        }
 
-    </style>
-    """,
+        .stTextInput > div > div > input:focus,
+        .stTextArea textarea:focus,
+        .stNumberInput input:focus {
+            border: 1px solid rgba(47,111,237,0.42) !important;
+            box-shadow: 0 0 0 1px rgba(47,111,237,0.16);
+        }
+
+        .stSelectbox > div > div {
+            background: rgba(255,255,255,0.02) !important;
+            color: var(--text-main) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+        }
+
+        .stFileUploader > div {
+            background: rgba(255,255,255,0.02);
+            border: 1px dashed rgba(148,163,184,0.18);
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        /* Botões */
+        .stButton > button {
+            width: 100%;
+            border-radius: 12px;
+            font-weight: 700;
+            border: 1px solid rgba(47,111,237,0.26);
+            background: linear-gradient(180deg, #214D9C 0%, #183D7A 100%);
+            color: #F8FBFF;
+            box-shadow: none;
+            transition: 0.18s ease-in-out;
+        }
+
+        .stButton > button:hover {
+            background: linear-gradient(180deg, #285CB8 0%, #1D478B 100%);
+            border-color: rgba(102, 157, 255, 0.40);
+            transform: translateY(-1px);
+        }
+
+        /* Alertas */
+        div[data-testid="stAlert"] {
+            border-radius: 14px !important;
+            border: 1px solid var(--border) !important;
+        }
+
+        /* Expander */
+        details {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 4px 10px;
+        }
+
+        /* Dataframe */
+        div[data-testid="stDataFrame"] {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 6px;
+        }
+
+        /* Métricas */
+        div[data-testid="stMetric"] {
+            background: linear-gradient(180deg, rgba(255,255,255,0.028) 0%, rgba(255,255,255,0.018) 100%);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: var(--shadow);
+        }
+
+        /* Containers com border=True do Streamlit */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0.015) 100%);
+            border: 1px solid var(--border) !important;
+            border-radius: 18px !important;
+            box-shadow: none;
+        }
+
+        /* Ajuste de excesso visual */
+        div[data-testid="stVerticalBlock"] > div {
+            gap: 0.55rem;
+        }
+
+        /* Sidebar - botão sair */
+        section[data-testid="stSidebar"] .stButton > button {
+            background: linear-gradient(180deg, #16345E 0%, #122B4D 100%);
+            border: 1px solid rgba(95, 145, 230, 0.22);
+        }
+
+        /* Scrollbar suave */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #08131D;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #213246;
+            border-radius: 12px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2B415A;
+        }
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
