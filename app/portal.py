@@ -1266,8 +1266,8 @@ st.sidebar.markdown(
             {iniciais}
         </div>
 
-        </div>
-            <div style="font-size:12px;color:#8FA5BC;">
+        <div>
+            </div style="font-size:12px;color:#8FA5BC;">
                 Usuário atual
             </div>
             <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
