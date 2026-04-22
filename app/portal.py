@@ -2604,3 +2604,9 @@ elif menu == "Painel de Cadastros" and perfil_atual == "admin":
                         f"Empresa: {convite.get('empresa_nome') or 'Sem empresa'} • "
                         f"Concluído em: {convite['utilizado_em'].strftime('%d/%m/%Y %H:%M') if convite['utilizado_em'] else '-'}"
                     )
+
+                    perfil_link = ""
+                    if convite["tipo_usuario"] == "cliente":
+                        perfil_link = f"/perfil_cliente?email={convite['email']}"
+                    elif convite["tipo_usuario"] == "atendente":
+                        perfil_link = f"/perfil_atendente?email={convite['email']}"
