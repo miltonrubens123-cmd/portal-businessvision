@@ -1063,17 +1063,12 @@ def agrupar_solicitacoes_por_cliente(solicitacoes):
 
 
 def montar_url_convite(token_convite):
-    base_url = obter_app_base_url()
+    base_url = (
+        obter_secret(["APP_BASE_URL"]) or os.getenv("APP_BASE_URL", "") or ""
+    ).strip()
+
     if not base_url:
-        try:
-            qp = st.query_params.to_dict()
-            qp["invite"] = token_convite
-            if "token" in qp:
-                del qp["token"]
-            query = "&".join([f"{k}={quote_plus(str(v))}" for k, v in qp.items()])
-            return f"?{query}"
-        except Exception:
-            return f"?invite={token_convite}"
+        return f"?invite={quote_plus(token_convite)}"
 
     separador = "&" if "?" in base_url else "?"
     return f"{base_url}{separador}invite={quote_plus(token_convite)}"
