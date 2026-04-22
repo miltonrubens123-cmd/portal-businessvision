@@ -15,7 +15,6 @@ from PIL import Image
 import psycopg
 from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
-import re
 
 
 @st.cache_resource
@@ -73,48 +72,6 @@ def run_query(sql, params=None, fetchone=False, fetchall=False):
         if fetchall:
             return cur.fetchall()
         return None
-
-
-def autenticar_usuario(usuario_digitado, senha_digitada):
-    user = conn.execute(
-        """
-        SELECT id, usuario, senha_hash, perfil, ativo
-        FROM usuarios
-        WHERE usuario = %s
-        LIMIT 1
-        """,
-        (usuario_digitado,),
-    ).fetchone()
-
-    if not user or not user["ativo"]:
-        return None
-
-    if verificar_senha(senha_digitada, user["senha_hash"]):
-        return user
-
-    return None
-
-
-def formatar_cnpj(cnpj):
-    cnpj = re.sub(r"\D", "", cnpj)
-    if len(cnpj) == 14:
-        return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
-    return cnpj
-
-
-def formatar_cpf(cpf):
-    cpf = re.sub(r"\D", "", cpf)
-    if len(cpf) == 11:
-        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
-    return cpf
-
-
-def validar_cnpj(cnpj):
-    return len(re.sub(r"\D", "", cnpj)) == 14
-
-
-def validar_cpf(cpf):
-    return len(re.sub(r"\D", "", cpf)) == 11
 
 
 # ----------------------------
@@ -285,14 +242,6 @@ def validar_upload_imagem(arquivo):
         )
 
     return True, ""
-
-
-def validar_cnpj(cnpj):
-    return len(re.sub(r"\D", "", cnpj)) == 14
-
-
-def validar_cpf(cpf):
-    return len(re.sub(r"\D", "", cpf)) == 11
 
 
 admin_config = obter_admin_config()
@@ -1021,22 +970,6 @@ if not st.session_state.logado:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.stop()
-
-
-perfil = st.session_state.get("perfil")
-
-if perfil == "admin":
-    menu_options = [...]
-elif perfil == "atendente":
-    menu_options = ["Demandas Solicitadas", "Dashboard"]
-else:
-    menu_options = ["Nova Solicitação", "Demandas Solicitadas"]
-
-user = autenticar_usuario(usuario_digitado, senha_digitada)
-
-if user:
-    st.session_state.usuario = user["usuario"]
-    st.session_state.perfil = user["perfil"]
 
 
 def aplicar_design_portal():
@@ -2208,8 +2141,6 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                         """,
                         unsafe_allow_html=True,
                     )
-
-                    cnpj = st.text_input("CNPJ", placeholder="00.000.000/0000-00")
 
                 with col5:
                     b1, b2, b3 = st.columns(3)
