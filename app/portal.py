@@ -1196,7 +1196,6 @@ try:
 except ValueError:
     default_idx = 0
 
-
 ICONS = {
     "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
     "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
@@ -1207,38 +1206,52 @@ ICONS = {
 st.sidebar.markdown(
     """
     <style>
-    /* esconde o visual padrão do radio */
+    section[data-testid="stSidebar"] {
+        min-width: 260px !important;
+        max-width: 260px !important;
+    }
+
+    div[role="radiogroup"] {
+        gap: 0.35rem;
+    }
+
     div[role="radiogroup"] label {
         position: relative;
-        min-height: 44px;
+        min-height: 46px;
         margin-bottom: 8px;
         border-radius: 12px;
         border: 1px solid rgba(120,145,170,0.18);
         background: transparent;
         padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    div[role="radiogroup"] label:hover {
+        border: 1px solid rgba(120,145,170,0.30);
+        background: rgba(255,255,255,0.03);
     }
 
     div[role="radiogroup"] label > div:first-child {
         display: none !important;
     }
 
-    div[role="radiogroup"] label > div:nth-child(2) {
+    div[role="radiogroup"] label > div:nth-child(2) p {
         opacity: 0 !important;
-        height: 44px !important;
-        padding: 0 !important;
         margin: 0 !important;
+        font-size: 0 !important;
     }
 
     div[role="radiogroup"] label[data-checked="true"] {
-        background: #1D3B63 !important;
-        border: 1px solid rgba(84,138,226,0.30) !important;
+        background: rgba(29,59,99,0.95) !important;
+        border: 1px solid rgba(84,138,226,0.35) !important;
     }
 
     .bv-menu-item {
         display: flex;
         align-items: center;
         gap: 10px;
-        height: 44px;
+        height: 46px;
         padding: 0 14px;
         color: #B8C7D9;
         font-size: 14px;
@@ -1259,6 +1272,7 @@ st.sidebar.markdown(
         height: 18px;
         color: currentColor;
         opacity: 0.92;
+        flex-shrink: 0;
     }
     </style>
     """,
@@ -1279,7 +1293,7 @@ for nome in menu_options:
     ativo = nome == menu_escolhido
     st.sidebar.markdown(
         f"""
-        <div class="bv-menu-item {'active' if ativo else ''}" style="margin-top:-52px; margin-bottom:8px;">
+        <div class="bv-menu-item {'active' if ativo else ''}" style="margin-top:-54px; margin-bottom:8px;">
             <span class="bv-menu-icon">{ICONS.get(nome, '')}</span>
             <span>{nome}</span>
         </div>
@@ -1336,6 +1350,8 @@ st.sidebar.markdown(
 
 if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
     logout()
+
+
 # ----------------------------
 # NOVA SOLICITAÇÃO
 # ----------------------------
