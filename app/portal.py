@@ -1628,9 +1628,10 @@ def render_sidebar_menu(menu_options, current_menu, logo_b64):
         "Dashboard": "dashboard",
         "Demandas Solicitadas": "demandas",
         "Nova Solicitação": "nova",
+        "Cadastro de Empresas": "clientes",
         "Cadastro de Clientes": "clientes",
         "Cadastro de Atendentes": "atendentes",
-        "Painel de Cadastros": "cadastros",
+        "Painel de Invites": "cadastros",
     }
 
     if logo_b64:
@@ -1696,8 +1697,9 @@ menu_options_admin = [
     "Demandas Solicitadas",
     "Dashboard",
     "Cadastro de Clientes",
+    "Cadastro de Empresas",
     "Cadastro de Atendentes",
-    "Painel de Cadastros",
+    "Painel de Invites",
 ]
 menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
 menu_options_atendente = ["Demandas Solicitadas"]
@@ -2418,24 +2420,23 @@ elif menu == "Dashboard" and perfil_atual == "admin":
     else:
         st.info("Nenhuma solicitação registrada ainda.")
 
+elif menu == "Cadastro de Empresas" and perfil_atual == "admin":
+    st.header("Cadastro de Empresas")
 
-elif menu == "Cadastro de Clientes" and perfil_atual == "admin":
-    st.header("Cadastro de Clientes")
-
-    with st.expander("Cadastro de Empresa", expanded=False):
+    with st.expander("Cadastro de Empresa", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
-            cnpj = st.text_input("CNPJ")
-            razao_social = st.text_input("Razão Social")
-            fantasia = st.text_input("Nome Fantasia")
-            cep = st.text_input("CEP")
+            cnpj = st.text_input("CNPJ", key="empresa_cnpj")
+            razao_social = st.text_input("Razão Social", key="empresa_razao_social")
+            fantasia = st.text_input("Nome Fantasia", key="empresa_fantasia")
+            cep = st.text_input("CEP", key="empresa_cep")
         with c2:
-            logradouro = st.text_input("Logradouro")
-            numero = st.text_input("Número")
-            bairro = st.text_input("Bairro")
-            cidade = st.text_input("Cidade")
+            logradouro = st.text_input("Logradouro", key="empresa_logradouro")
+            numero = st.text_input("Número", key="empresa_numero")
+            bairro = st.text_input("Bairro", key="empresa_bairro")
+            cidade = st.text_input("Cidade", key="empresa_cidade")
 
-        if st.button("Cadastrar Empresa"):
+        if st.button("Cadastrar Empresa", key="btn_cadastrar_empresa"):
             if not fantasia.strip() or not razao_social.strip():
                 st.error("Preencha pelo menos Razão Social e Nome Fantasia.")
             else:
@@ -2458,6 +2459,228 @@ elif menu == "Cadastro de Clientes" and perfil_atual == "admin":
                 )
                 st.success("Empresa cadastrada com sucesso.")
                 st.rerun()
+
+    st.markdown("---")
+    st.subheader("Empresas cadastradas")
+
+    if "empresa_editando_id" not in st.session_state:
+        st.session_state.empresa_editando_id = None
+
+    empresas = conn.execute(
+        """
+        SELECT
+            id,
+            cnpj,
+            razao_social,
+            fantasia,
+            cep,
+            logradouro,
+            numero,
+            bairro,
+            cidade,
+            ativo
+        FROM empresas
+        ORDER BY fantasia, razao_social
+        """
+    ).fetchall()
+
+    if empresas:
+        empresas, _, _ = paginar_registros(
+            empresas, "pagina_empresas_cadastro", page_size=10
+        )
+
+        for emp in empresas:
+            empresa_id = emp["id"]
+
+            with st.container(border=True):
+                col1, col2, col3, col4 = st.columns([2.2, 2.5, 1.2, 3.1])
+
+                with col1:
+                    st.write(f"**{emp['fantasia'] or 'Sem fantasia'}**")
+                    st.caption(emp["razao_social"] or "")
+
+                with col2:
+                    st.write(f"CNPJ: {emp['cnpj'] or ''}")
+                    endereco = " • ".join(
+                        [
+                            x
+                            for x in [
+                                emp["cidade"] or "",
+                                emp["bairro"] or "",
+                                emp["logradouro"] or "",
+                                emp["numero"] or "",
+                            ]
+                            if x
+                        ]
+                    )
+                    st.caption(endereco)
+
+                with col3:
+                    status_empresa = "Ativa" if bool(emp["ativo"]) else "Inativa"
+                    st.write(status_empresa)
+
+                with col4:
+                    b1, b2, b3 = st.columns(3)
+
+                    with b1:
+                        if bool(emp["ativo"]):
+                            if st.button(
+                                "Inativar",
+                                key=f"inativar_empresa_{empresa_id}",
+                                use_container_width=True,
+                            ):
+                                conn.execute(
+                                    "UPDATE empresas SET ativo = FALSE WHERE id = %s",
+                                    (empresa_id,),
+                                )
+                                st.rerun()
+                        else:
+                            if st.button(
+                                "Ativar",
+                                key=f"ativar_empresa_{empresa_id}",
+                                use_container_width=True,
+                            ):
+                                conn.execute(
+                                    "UPDATE empresas SET ativo = TRUE WHERE id = %s",
+                                    (empresa_id,),
+                                )
+                                st.rerun()
+
+                    with b2:
+                        if st.button(
+                            "Excluir",
+                            key=f"excluir_empresa_{empresa_id}",
+                            use_container_width=True,
+                        ):
+                            possui_clientes = conn.execute(
+                                "SELECT 1 FROM clientes WHERE empresa_id = %s LIMIT 1",
+                                (empresa_id,),
+                            ).fetchone()
+
+                            if possui_clientes:
+                                st.warning(
+                                    "Esta empresa possui clientes vinculados. Inative ao invés de excluir."
+                                )
+                            else:
+                                conn.execute(
+                                    "DELETE FROM empresas WHERE id = %s",
+                                    (empresa_id,),
+                                )
+                                st.success("Empresa excluída.")
+                                st.rerun()
+
+                    with b3:
+                        if st.button(
+                            "Alterar",
+                            key=f"alterar_empresa_{empresa_id}",
+                            use_container_width=True,
+                        ):
+                            st.session_state.empresa_editando_id = empresa_id
+                            st.rerun()
+
+                if st.session_state.empresa_editando_id == empresa_id:
+                    st.markdown("**Alteração de empresa**")
+
+                    e1, e2 = st.columns(2)
+
+                    with e1:
+                        novo_cnpj = st.text_input(
+                            "CNPJ",
+                            value=emp["cnpj"] or "",
+                            key=f"edit_empresa_cnpj_{empresa_id}",
+                        )
+                        nova_razao = st.text_input(
+                            "Razão Social",
+                            value=emp["razao_social"] or "",
+                            key=f"edit_empresa_razao_{empresa_id}",
+                        )
+                        nova_fantasia = st.text_input(
+                            "Nome Fantasia",
+                            value=emp["fantasia"] or "",
+                            key=f"edit_empresa_fantasia_{empresa_id}",
+                        )
+                        novo_cep = st.text_input(
+                            "CEP",
+                            value=emp["cep"] or "",
+                            key=f"edit_empresa_cep_{empresa_id}",
+                        )
+
+                    with e2:
+                        novo_logradouro = st.text_input(
+                            "Logradouro",
+                            value=emp["logradouro"] or "",
+                            key=f"edit_empresa_logradouro_{empresa_id}",
+                        )
+                        novo_numero = st.text_input(
+                            "Número",
+                            value=emp["numero"] or "",
+                            key=f"edit_empresa_numero_{empresa_id}",
+                        )
+                        novo_bairro = st.text_input(
+                            "Bairro",
+                            value=emp["bairro"] or "",
+                            key=f"edit_empresa_bairro_{empresa_id}",
+                        )
+                        nova_cidade = st.text_input(
+                            "Cidade",
+                            value=emp["cidade"] or "",
+                            key=f"edit_empresa_cidade_{empresa_id}",
+                        )
+
+                    a1, a2 = st.columns(2)
+
+                    with a1:
+                        if st.button(
+                            "Salvar alteração",
+                            key=f"salvar_empresa_{empresa_id}",
+                            use_container_width=True,
+                        ):
+                            if not nova_razao.strip() or not nova_fantasia.strip():
+                                st.error("Preencha Razão Social e Nome Fantasia.")
+                            else:
+                                conn.execute(
+                                    """
+                                    UPDATE empresas
+                                    SET cnpj = %s,
+                                        razao_social = %s,
+                                        fantasia = %s,
+                                        cep = %s,
+                                        logradouro = %s,
+                                        numero = %s,
+                                        bairro = %s,
+                                        cidade = %s
+                                    WHERE id = %s
+                                    """,
+                                    (
+                                        formatar_cnpj(novo_cnpj.strip()),
+                                        nova_razao.strip(),
+                                        nova_fantasia.strip(),
+                                        novo_cep.strip(),
+                                        novo_logradouro.strip(),
+                                        novo_numero.strip(),
+                                        novo_bairro.strip(),
+                                        nova_cidade.strip(),
+                                        empresa_id,
+                                    ),
+                                )
+                                st.session_state.empresa_editando_id = None
+                                st.success("Empresa atualizada com sucesso.")
+                                st.rerun()
+
+                    with a2:
+                        if st.button(
+                            "Cancelar alteração",
+                            key=f"cancelar_empresa_{empresa_id}",
+                            use_container_width=True,
+                        ):
+                            st.session_state.empresa_editando_id = None
+                            st.rerun()
+    else:
+        st.info("Nenhuma empresa cadastrada ainda.")
+
+
+elif menu == "Cadastro de Clientes" and perfil_atual == "admin":
+    st.header("Cadastro de Clientes")
 
     with st.expander("Cadastro de Usuário", expanded=True):
         nome_completo = st.text_input("Nome completo")
