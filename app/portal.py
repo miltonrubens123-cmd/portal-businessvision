@@ -977,25 +977,25 @@ def aplicar_estilo_app():
         """
         <style>
         :root {
-            --bg: #F4F6F8;
-            --surface: #FFFFFF;
-            --border: #E6EAF0;
+            --bg: #071018;
+            --surface: #0D1722;
+            --border: rgba(148, 163, 184, 0.10);
 
-            --text-main: #1F2937;
-            --text-soft: #6B7280;
-            --text-muted: #9CA3AF;
+            /* TEXTO AJUSTADO (MENOS AZUL) */
+            --text-main: #E6EDF3;
+            --text-soft: #9AA4B2;
+            --text-muted: #6B7785;
 
-            --accent: #2563EB;
+            --accent: #2F6FED;
         }
 
         .stApp {
-            background: var(--bg);
+            background: linear-gradient(180deg, #071018 0%, #08131D 100%);
             color: var(--text-main);
         }
 
-        /* SIDEBAR */
         section[data-testid="stSidebar"] {
-            background: #FFFFFF;
+            background: #08111C;
             border-right: 1px solid var(--border);
         }
 
@@ -1003,13 +1003,12 @@ def aplicar_estilo_app():
             color: var(--text-main) !important;
         }
 
-        /* TITULOS */
         h1, h2, h3 {
             color: var(--text-main) !important;
             font-weight: 700 !important;
         }
 
-        /* TEXTOS */
+        /* 🔥 AQUI ESTÁ O AJUSTE PRINCIPAL */
         p, label, .stCaption, .stMarkdown, .stText {
             color: var(--text-soft) !important;
         }
@@ -1018,60 +1017,29 @@ def aplicar_estilo_app():
             color: var(--text-main) !important;
         }
 
-        /* LINHAS */
         hr {
-            border-color: var(--border) !important;
+            border-color: rgba(148,163,184,0.08) !important;
         }
 
-        /* INPUTS */
         .stTextInput input,
         .stTextArea textarea,
         .stSelectbox div {
-            background: #FFFFFF !important;
+            background: rgba(255,255,255,0.02) !important;
             color: var(--text-main) !important;
             border: 1px solid var(--border) !important;
             border-radius: 10px !important;
         }
 
-        /* BOTÕES */
         .stButton > button {
             border-radius: 10px;
             font-weight: 700;
-            border: none;
-            background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
+            border: 1px solid rgba(47,111,237,0.30);
+            background: linear-gradient(180deg, #214D9C 0%, #183D7A 100%);
             color: white;
         }
 
         .stButton > button:hover {
-            background: linear-gradient(180deg, #1D4ED8 0%, #1E40AF 100%);
-        }
-
-        /* CARDS (onde você usa container border=True) */
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            background: var(--surface);
-            border: 1px solid var(--border) !important;
-            border-radius: 14px !important;
-            padding: 12px;
-        }
-
-        /* DATAFRAME */
-        div[data-testid="stDataFrame"] {
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-        }
-
-        /* EXPANDER */
-        details {
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-        }
-
-        /* ALERTA */
-        div[data-testid="stAlert"] {
-            border-radius: 12px;
-            border: 1px solid var(--border);
+            background: linear-gradient(180deg, #285CB8 0%, #1D478B 100%);
         }
 
         </style>
