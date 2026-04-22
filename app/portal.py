@@ -1120,6 +1120,21 @@ def aplicar_estilo_app():
         .stMarkdown {
             margin-bottom: 0.3rem !important;
         }
+
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #03101d 0%, #051424 100%);
+            border-right: 1px solid rgba(120, 145, 170, 0.12);
+            min-width: 260px !important;
+            max-width: 260px !important;
+        }
+
+        section[data-testid="stSidebar"] * {
+            color: #EAF2FF !important;
+        }
+
+        section[data-testid="stSidebar"] button[kind="header"] {
+            display: none !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1182,9 +1197,6 @@ except ValueError:
     default_idx = 0
 
 
-# ----------------------------
-# ICONES SVG
-# ----------------------------
 ICONS = {
     "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
     "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
@@ -1192,54 +1204,95 @@ ICONS = {
     "Cadastro de Clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="currentColor" stroke-width="1.8"/></svg>',
 }
 
+st.sidebar.markdown(
+    """
+    <style>
+    /* esconde o visual padrão do radio */
+    div[role="radiogroup"] label {
+        position: relative;
+        min-height: 44px;
+        margin-bottom: 8px;
+        border-radius: 12px;
+        border: 1px solid rgba(120,145,170,0.18);
+        background: transparent;
+        padding: 0 !important;
+    }
 
-# ----------------------------
-# MENU VISUAL
-# ----------------------------
+    div[role="radiogroup"] label > div:first-child {
+        display: none !important;
+    }
+
+    div[role="radiogroup"] label > div:nth-child(2) {
+        opacity: 0 !important;
+        height: 44px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    div[role="radiogroup"] label[data-checked="true"] {
+        background: #1D3B63 !important;
+        border: 1px solid rgba(84,138,226,0.30) !important;
+    }
+
+    .bv-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 44px;
+        padding: 0 14px;
+        color: #B8C7D9;
+        font-size: 14px;
+        font-weight: 500;
+        pointer-events: none;
+    }
+
+    .bv-menu-item.active {
+        color: #FFFFFF;
+        font-weight: 600;
+    }
+
+    .bv-menu-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        color: currentColor;
+        opacity: 0.92;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.sidebar.markdown("### Menu")
 
-menu = None
+menu_escolhido = st.sidebar.radio(
+    "",
+    menu_options,
+    index=default_idx,
+    key="menu_radio_svg",
+    label_visibility="collapsed",
+)
 
-for i, nome in enumerate(menu_options):
-    is_active = nome == st.session_state.get("menu_atual")
-
-    if st.sidebar.button(
-        nome,
-        key=f"menu_{i}",
-        use_container_width=True,
-    ):
-        st.session_state.menu_atual = nome
-        menu = nome
-
+for nome in menu_options:
+    ativo = nome == menu_escolhido
     st.sidebar.markdown(
         f"""
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:10px;
-            margin-top:-32px;
-            margin-left:12px;
-            pointer-events:none;
-            color:{'#FFFFFF' if is_active else '#B8C7D9'};
-            font-weight:{'600' if is_active else '500'};
-        ">
-            {ICONS.get(nome, "")}
+        <div class="bv-menu-item {'active' if ativo else ''}" style="margin-top:-52px; margin-bottom:8px;">
+            <span class="bv-menu-icon">{ICONS.get(nome, '')}</span>
             <span>{nome}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-
-menu = st.session_state.get("menu_atual", menu_options[0])
-
+menu = menu_escolhido
+st.session_state.menu_atual = menu
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
-
-# ----------------------------
-# USUARIO (PADRÃO LIMPO)
-# ----------------------------
+st.sidebar.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
 iniciais = st.session_state.usuario[:2].upper()
@@ -1251,26 +1304,28 @@ st.sidebar.markdown(
         align-items:center;
         gap:10px;
         margin-top:10px;
+        margin-bottom:14px;
     ">
         <div style="
-            width:36px;
-            height:36px;
+            width:42px;
+            height:42px;
             border-radius:50%;
-            background:#1D4ED8;
+            background:#2B59C3;
             display:flex;
             align-items:center;
             justify-content:center;
             font-weight:700;
             color:white;
+            font-size:18px;
         ">
             {iniciais}
         </div>
 
         <div>
-            <div style="font-size:12px;color:#8FA5BC;">
+            <div style="font-size:12px;color:#8FA5BC;line-height:1.2;">
                 Usuário atual
             </div>
-            <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
+            <div style="font-size:15px;font-weight:700;color:#EAF2FF;line-height:1.3;">
                 {st.session_state.usuario}
             </div>
         </div>
@@ -1279,11 +1334,8 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-
 if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
     logout()
-
 # ----------------------------
 # NOVA SOLICITAÇÃO
 # ----------------------------
