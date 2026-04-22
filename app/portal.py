@@ -84,10 +84,6 @@ def run_query(sql, params=None, fetchone=False, fetchall=False):
             return None
 
 
-if st.button("Atualizar portal", use_container_width=True):
-    st.rerun()
-
-
 def formatar_cnpj(cnpj):
     cnpj = re.sub(r"\D", "", cnpj or "")
     if len(cnpj) == 14:
