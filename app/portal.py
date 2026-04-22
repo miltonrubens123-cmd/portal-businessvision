@@ -1631,7 +1631,7 @@ def render_sidebar_menu(menu_options, current_menu, logo_b64):
         "Cadastro de Empresas": "clientes",
         "Cadastro de Clientes": "clientes",
         "Cadastro de Atendentes": "atendentes",
-        "Painel de Invites": "cadastros",
+        "Painel de Cadastros": "cadastros",
     }
 
     if logo_b64:
@@ -1699,7 +1699,7 @@ menu_options_admin = [
     "Cadastro de Clientes",
     "Cadastro de Empresas",
     "Cadastro de Atendentes",
-    "Painel de Invites",
+    "Painel de Cadastros",
 ]
 menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
 menu_options_atendente = ["Demandas Solicitadas"]
