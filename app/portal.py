@@ -1352,111 +1352,194 @@ def aplicar_estilo_login():
 
 def render_tela_convite(token_convite):
     aplicar_estilo_login()
+
+    st.markdown(
+        """
+        <style>
+        .convite-wrap {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 12px 10px 32px 10px;
+        }
+
+        .convite-logo {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 14px;
+        }
+
+        .convite-logo img {
+            max-width: 120px;
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .convite-titulo {
+            text-align: center;
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 6px;
+        }
+
+        .convite-subtitulo {
+            text-align: center;
+            color: #c7d7e6;
+            font-size: 15px;
+            margin-bottom: 18px;
+        }
+
+        @media (max-width: 640px) {
+            .block-container {
+                padding-left: 12px !important;
+                padding-right: 12px !important;
+                padding-top: 18px !important;
+                padding-bottom: 18px !important;
+            }
+
+            .convite-wrap {
+                max-width: 100%;
+                padding: 8px 4px 24px 4px;
+            }
+
+            .convite-logo img {
+                max-width: 88px;
+            }
+
+            .convite-titulo {
+                font-size: 20px;
+            }
+
+            .convite-subtitulo {
+                font-size: 14px;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     convite = obter_convite_por_token(token_convite)
 
-    col1, col2, col3 = st.columns([1.1, 1, 1.1])
-    with col2:
-        if logo_b64:
-            st.markdown(
-                f"""
-                <div style='display:flex; justify-content:center; margin-bottom:18px;'>
-                    <img src='data:image/png;base64,{logo_b64}' width='140'>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    st.markdown('<div class="convite-wrap">', unsafe_allow_html=True)
 
+    if logo_b64:
         st.markdown(
-            "<div style='text-align:center; color:white; font-size:26px; font-weight:700;'>BUSINESS VISION</div>",
+            f"""
+            <div class="convite-logo">
+                <img src="data:image/png;base64,{logo_b64}">
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-        if not convite:
-            st.error("Convite inválido.")
-            st.stop()
+    st.markdown(
+        '<div class="convite-titulo">BUSINESS VISION</div>',
+        unsafe_allow_html=True,
+    )
 
-        if convite["status"] == "concluido":
-            st.success("Este convite já foi utilizado.")
-            st.stop()
-
-        if convite["status"] in ("cancelado", "expirado") or convite_expirado(convite):
-            st.error("Este convite expirou ou foi cancelado.")
-            st.stop()
-
-        st.markdown(
-            "<div style='text-align:center; color:#c7d7e6; font-size:15px; margin-top:6px; margin-bottom:20px;'>Concluir cadastro</div>",
-            unsafe_allow_html=True,
-        )
-
-        st.info(
-            f"Convite para {convite['nome']} • Perfil: {convite['tipo_usuario'].capitalize()}"
-            + (
-                f" • Empresa: {convite['empresa_nome']}"
-                if convite.get("empresa_nome")
-                else ""
-            )
-        )
-
-        email = st.text_input("E-mail", value=convite["email"], disabled=True)
-        nome = st.text_input("Nome completo", value=convite["nome"])
-        usuario = st.text_input(
-            "Usuário",
-            value=convite.get("usuario_sugerido") or gerar_usuario(convite["nome"]),
-        )
-        senha = st.text_input("Senha", type="password")
-        confirmar_senha = st.text_input("Confirmar senha", type="password")
-
-        cpf = ""
-        funcao = ""
-        if convite["tipo_usuario"] == "cliente":
-            cpf = st.text_input("CPF")
-            funcao = st.text_input("Função")
-        else:
-            funcao = st.text_input("Função / Cargo")
-
-        if st.button("Concluir cadastro"):
-            if not nome.strip() or not usuario.strip() or not senha.strip():
-                st.error("Preencha nome, usuário e senha.")
-            elif senha != confirmar_senha:
-                st.error("As senhas não conferem.")
-            elif len(senha.strip()) < 6:
-                st.error("A senha deve ter pelo menos 6 caracteres.")
-            else:
-                try:
-                    concluir_convite(
-                        convite=convite,
-                        nome=nome.strip(),
-                        usuario=usuario.strip(),
-                        senha=senha.strip(),
-                        cpf=cpf.strip(),
-                        funcao=funcao.strip(),
-                        email=email.strip(),
-                        nome_atendente=nome.strip(),
-                    )
-                    st.success(
-                        "Cadastro concluído com sucesso. Agora você já pode acessar o portal."
-                    )
-
-                    portal_url = (
-                        st.secrets.get("APP_BASE_URL")
-                        or os.getenv("APP_BASE_URL", "")
-                        or ""
-                    ).rstrip("/")
-
-                    st.info(f"Usuário cadastrado: {usuario}")
-
-                    if portal_url:
-                        st.link_button(
-                            "Acessar portal", portal_url, use_container_width=True
-                        )
-                        st.caption(f"Portal: {portal_url}")
-                    else:
-                        st.warning("URL do portal não configurada.")
-                except ValueError as exc:
-                    st.error(str(exc))
-                except Exception as exc:
-                    st.error(f"Erro ao concluir cadastro: {exc}")
+    if not convite:
+        st.error("Convite inválido.")
+        st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
+
+    if convite["status"] == "concluido":
+        st.success("Este convite já foi utilizado.")
+        portal_url = (
+            st.secrets.get("APP_BASE_URL") or os.getenv("APP_BASE_URL", "") or ""
+        ).rstrip("/")
+        if portal_url:
+            st.link_button("Acessar portal", portal_url, use_container_width=True)
+            st.caption(f"Portal: {portal_url}")
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.stop()
+
+    if convite["status"] in ("cancelado", "expirado") or convite_expirado(convite):
+        st.error("Este convite expirou ou foi cancelado.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.stop()
+
+    st.markdown(
+        '<div class="convite-subtitulo">Concluir cadastro</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.info(
+        f"Convite para {convite['nome']} • Perfil: {convite['tipo_usuario'].capitalize()}"
+        + (
+            f" • Empresa: {convite['empresa_nome']}"
+            if convite.get("empresa_nome")
+            else ""
+        )
+    )
+
+    email = st.text_input("E-mail", value=convite["email"], disabled=True)
+    nome = st.text_input("Nome completo", value=convite["nome"])
+    usuario = st.text_input(
+        "Usuário",
+        value=convite.get("usuario_sugerido") or gerar_usuario(convite["nome"]),
+    )
+    senha = st.text_input("Senha", type="password")
+    confirmar_senha = st.text_input("Confirmar senha", type="password")
+
+    cpf = ""
+    funcao = ""
+    if convite["tipo_usuario"] == "cliente":
+        cpf = st.text_input("CPF")
+        funcao = st.text_input("Função")
+    else:
+        funcao = st.text_input("Função / Cargo")
+
+    if st.button("Concluir cadastro", use_container_width=True):
+        if not nome.strip() or not usuario.strip() or not senha.strip():
+            st.error("Preencha nome, usuário e senha.")
+        elif senha != confirmar_senha:
+            st.error("As senhas não conferem.")
+        elif len(senha.strip()) < 6:
+            st.error("A senha deve ter pelo menos 6 caracteres.")
+        else:
+            try:
+                concluir_convite(
+                    convite=convite,
+                    nome=nome.strip(),
+                    usuario=usuario.strip(),
+                    senha=senha.strip(),
+                    cpf=cpf.strip(),
+                    funcao=funcao.strip(),
+                    email=email.strip(),
+                    nome_atendente=nome.strip(),
+                )
+
+                st.success(
+                    "Cadastro concluído com sucesso. Agora você já pode acessar o portal."
+                )
+
+                portal_url = (
+                    st.secrets.get("APP_BASE_URL")
+                    or os.getenv("APP_BASE_URL", "")
+                    or ""
+                ).rstrip("/")
+
+                st.info(f"Usuário cadastrado: {usuario}")
+
+                if portal_url:
+                    st.link_button(
+                        "Acessar portal", portal_url, use_container_width=True
+                    )
+                    st.caption(f"Portal: {portal_url}")
+                else:
+                    st.warning("URL do portal não configurada.")
+
+            except ValueError as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"Erro ao concluir cadastro: {exc}")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.stop()
 
 
 invite_token = st.query_params.get("invite")
