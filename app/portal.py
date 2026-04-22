@@ -1022,11 +1022,6 @@ if not st.session_state.logado:
 
     st.stop()
 
-    user = autenticar_usuario(usuario_digitado, senha_digitada)
-
-if user:
-    st.session_state.usuario = user["usuario"]
-    st.session_state.perfil = user["perfil"]
 
 perfil = st.session_state.get("perfil")
 
@@ -1036,6 +1031,12 @@ elif perfil == "atendente":
     menu_options = ["Demandas Solicitadas", "Dashboard"]
 else:
     menu_options = ["Nova Solicitação", "Demandas Solicitadas"]
+
+user = autenticar_usuario(usuario_digitado, senha_digitada)
+
+if user:
+    st.session_state.usuario = user["usuario"]
+    st.session_state.perfil = user["perfil"]
 
 
 def aplicar_design_portal():
