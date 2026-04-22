@@ -166,7 +166,7 @@ def enviar_email_convite(destinatario, nome, link):
         return False, "Configuração de e-mail não encontrada em st.secrets['email']."
 
     assunto = "Convite - Portal Business Vision"
-    html = f"""
+    html_body = f"""
 <html>
   <body style="margin:0; padding:0; background:#0B1E33; font-family:Arial, sans-serif;">
 
