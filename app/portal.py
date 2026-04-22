@@ -977,216 +977,49 @@ def aplicar_estilo_app():
         """
         <style>
         :root {
-            --bg: #F4F6F8;
+            --bg: #EEF2F6;
             --surface: #FFFFFF;
-            --surface-soft: #FAFBFC;
-            --border: #E6EAF0;
-            --border-soft: #EEF2F6;
-
+            --border: #E3E8EF;
             --text-main: #1F2937;
             --text-soft: #667085;
-            --text-muted: #98A2B3;
-
-            --accent: #2563EB;
-            --accent-hover: #1D4ED8;
-
-            --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
-            --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.06);
-            --radius: 16px;
         }
 
         .stApp {
-            background: var(--bg);
+            background: linear-gradient(180deg, #EEF2F6 0%, #F6F8FB 100%);
             color: var(--text-main);
         }
 
-        [data-testid="stHeader"] {
-            background: transparent;
-        }
-
-        .block-container {
-            padding-top: 1.25rem;
-            padding-bottom: 2rem;
-            max-width: 1380px;
-        }
-
-        section[data-testid="stSidebar"] {
-            background: #FFFFFF;
-            border-right: 1px solid var(--border);
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: var(--text-main) !important;
-        }
-
-        h1, h2, h3 {
-            color: var(--text-main) !important;
-            font-weight: 700 !important;
-            letter-spacing: -0.02em;
-        }
-
-        p, label, .stCaption, .stMarkdown, .stText {
-            color: var(--text-soft) !important;
-        }
-
-        strong, b {
-            color: var(--text-main) !important;
-        }
-
-        hr {
-            border-color: var(--border) !important;
-        }
-
-        .stTextInput > div > div > input,
-        .stTextArea textarea,
-        .stNumberInput input {
-            background: #FFFFFF !important;
-            color: var(--text-main) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 12px !important;
-        }
-
-        .stTextInput > div > div > input:focus,
-        .stTextArea textarea:focus,
-        .stNumberInput input:focus {
-            border: 1px solid #B9CCF7 !important;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
-        }
-
-        .stSelectbox > div > div {
-            background: #FFFFFF !important;
-            color: var(--text-main) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 12px !important;
-        }
-
-        .stFileUploader > div {
-            background: #FFFFFF;
-            border: 1px dashed #D8E0EA;
-            border-radius: 14px;
-            padding: 12px;
-        }
-
-        .stButton > button {
-            width: 100%;
-            border-radius: 12px;
-            font-weight: 700;
-            border: none;
-            background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
-            color: white;
-            box-shadow: none;
-        }
-
-        .stButton > button:hover {
-            background: linear-gradient(180deg, #1D4ED8 0%, #1E40AF 100%);
-        }
-
-        div[data-testid="stMetric"] {
-            background: #FFFFFF;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 14px 16px;
-            box-shadow: var(--shadow-sm);
-        }
-
-        div[data-testid="stDataFrame"] {
-            background: #FFFFFF;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 6px;
-        }
-
-        div[data-testid="stAlert"] {
-            border-radius: 14px;
-            border: 1px solid var(--border) !important;
-        }
-
-        details {
-            background: #FFFFFF;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 4px 10px;
-        }
-
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            background: #FFFFFF;
-            border: 1px solid var(--border) !important;
-            border-radius: 18px !important;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .bv-section-card {
-            background: #FFFFFF;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 16px 18px;
-            box-shadow: var(--shadow-sm);
-            margin-bottom: 12px;
-        }
-
-        .bv-page-subtitle {
-            color: var(--text-soft);
-            font-size: 14px;
-            margin-top: -4px;
-            margin-bottom: 12px;
-        }
-
         .bv-filter-wrap {
-            background: #FFFFFF;
-            border: 1px solid var(--border);
-            border-radius: 18px;
+            background: #F8FAFC;
+            border: 1px solid #E3E8EF;
+            border-radius: 16px;
             padding: 14px;
-            box-shadow: var(--shadow-sm);
-            margin-bottom: 16px;
+            margin-bottom: 18px;
         }
 
         .bv-demand-card {
             background: #FFFFFF;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 16px;
-            margin-bottom: 14px;
-            box-shadow: var(--shadow-sm);
+            border: 1px solid #E3E8EF;
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
         }
 
-        .bv-demand-id {
-            font-size: 12px;
-            font-weight: 700;
-            color: #475467;
-            letter-spacing: 0.04em;
+        .stTextInput input,
+        .stSelectbox div {
+            background: #FFFFFF !important;
+            border: 1px solid #DCE3EB !important;
+            color: #1F2937 !important;
         }
 
-        .bv-demand-title {
-            font-size: 17px;
-            font-weight: 700;
-            color: #1F2937;
-            line-height: 1.3;
-            margin-bottom: 4px;
-        }
-
-        .bv-demand-desc {
-            font-size: 13px;
-            color: #667085;
-            line-height: 1.5;
-            margin-bottom: 12px;
-        }
-
-        .bv-meta {
-            font-size: 12px;
-            color: #667085;
-        }
-
-        .bv-meta strong {
-            color: #344054 !important;
-        }
-
-        .bv-client-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: #1F2937;
-            margin: 18px 0 10px 0;
-        }
         </style>
+        .stTextInput input,
+        .stSelectbox div {
+            background: #FFFFFF !important;
+            border: 1px solid #DCE3EB !important;
+            color: #1F2937 !important;
+        }
         """,
         unsafe_allow_html=True,
     )
