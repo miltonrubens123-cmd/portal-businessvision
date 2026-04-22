@@ -1021,7 +1021,7 @@ st.sidebar.caption("Usuário atual")
 st.sidebar.write(f"**{st.session_state.usuario}**")
 st.sidebar.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
 
-if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
+if st.sidebar.button("⇆ Trocar usuário", use_container_width=True):
     logout()
 
 
@@ -1211,7 +1211,7 @@ elif menu == "Demandas Solicitadas":
     col_legenda1, col_legenda2 = st.columns([8, 1])
 
     with col_legenda2:
-        if st.button("📌 Legenda", use_container_width=True):
+        if st.button("▤ Legenda", use_container_width=True):
             st.session_state.mostrar_legenda = not st.session_state.get(
                 "mostrar_legenda", False
             )
