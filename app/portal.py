@@ -1051,9 +1051,7 @@ def agrupar_solicitacoes_por_cliente(solicitacoes):
 
 def montar_url_convite(token_convite):
     base_url = (
-        st.secrets.get("APP_BASE_URL")
-        or os.getenv("APP_BASE_URL", "")
-        or ""
+        st.secrets.get("APP_BASE_URL") or os.getenv("APP_BASE_URL", "") or ""
     ).strip()
 
     if not base_url:
@@ -1395,6 +1393,22 @@ def render_tela_convite(token_convite):
                     st.success(
                         "Cadastro concluído com sucesso. Agora você já pode acessar o portal."
                     )
+
+                    portal_url = (
+                        st.secrets.get("APP_BASE_URL")
+                        or os.getenv("APP_BASE_URL", "")
+                        or ""
+                    ).rstrip("/")
+
+                    st.info(f"Usuário cadastrado: {usuario}")
+
+                    if portal_url:
+                        st.link_button(
+                            "Acessar portal", portal_url, use_container_width=True
+                        )
+                        st.caption(f"Portal: {portal_url}")
+                    else:
+                        st.warning("URL do portal não configurada.")
                 except ValueError as exc:
                     st.error(str(exc))
                 except Exception as exc:
