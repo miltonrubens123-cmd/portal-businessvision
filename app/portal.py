@@ -1128,26 +1128,16 @@ def render_sidebar_menu(menu_options, current_menu, token, logo_b64):
     parts = []
     if logo_b64:
         parts.append(
-            f'''
-            <div class="bv-sidebar-top">
-                <img class="bv-sidebar-logo" src="data:image/png;base64,{logo_b64}">
-                <div class="bv-sidebar-title">Portal Business Vision</div>
-            </div>
-            '''
+            f'<div class="bv-sidebar-top"><img class="bv-sidebar-logo" src="data:image/png;base64,{logo_b64}"><div class="bv-sidebar-title">Portal Business Vision</div></div>'
         )
     parts.append('<div class="bv-menu-heading">Menu</div>')
     for item in menu_options:
         active = "active" if item == current_menu else ""
         href = f"?token={quote(token or '')}&menu={quote(item)}" if token else f"?menu={quote(item)}"
         parts.append(
-            f'''
-            <a class="bv-menu-link {active}" href="{href}">
-                <span class="bv-menu-icon">{svg_menu_icon(icon_map.get(item, "demandas"))}</span>
-                <span class="bv-menu-text">{item}</span>
-            </a>
-            '''
+            f'<a class="bv-menu-link {active}" href="{href}"><span class="bv-menu-icon">{svg_menu_icon(icon_map.get(item, "demandas"))}</span><span class="bv-menu-text">{item}</span></a>'
         )
-    return "\n".join(parts)
+    return "".join(parts)
 
 # ----------------------------
 # APP LOGADO
@@ -1216,7 +1206,14 @@ with st.sidebar:
     )
     st.markdown('<div class="bv-sidebar-divider"></div>', unsafe_allow_html=True)
 
-    iniciais = (st.session_state.usuario or "US")[:2].upper()
+    nome_usuario = (st.session_state.usuario or "").strip()
+    partes_nome_usuario = [p for p in nome_usuario.split() if p]
+    if len(partes_nome_usuario) >= 2:
+        iniciais = (partes_nome_usuario[0][0] + partes_nome_usuario[1][0]).upper()
+    elif len(partes_nome_usuario) == 1:
+        iniciais = partes_nome_usuario[0][:2].upper()
+    else:
+        iniciais = "US"
     st.markdown(
         f"""
         <div class="bv-user-card">
