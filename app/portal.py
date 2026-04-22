@@ -1267,7 +1267,7 @@ st.sidebar.markdown(
         </div>
 
         <div>
-            </div style="font-size:12px;color:#8FA5BC;">
+            <div style="font-size:12px;color:#8FA5BC;">
                 Usuário atual
             </div>
             <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
@@ -2021,23 +2021,29 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                     s = style_status[status_cliente]
                     st.markdown(
                         f"""
-                        <div style="
-                            display:inline-flex;
-                            align-items:center;
-                            gap:8px;
-                            padding:6px 10px;
-                            border-radius:999px;
-                            background:{s['bg']};
-                            border:1px solid {s['border']};
-                            color:{s['text']};
-                            font-size:12px;
-                            font-weight:700;
-                            white-space:nowrap;
-                        ">
-                            <span style="width:8px;height:8px;border-radius:50%;background:{s['dot']};display:inline-block;"></span>
-                            {status_cliente}
-                        </div>
-                        """,
+                    <div style="
+                        display:inline-flex;
+                        align-items:center;
+                        gap:8px;
+                        padding:6px 10px;
+                        border-radius:999px;
+                        background:{bg_badge};
+                        border:1px solid {bd_badge};
+                        color:{cor_txt};
+                        font-size:12px;
+                        font-weight:700;
+                        white-space:nowrap;
+                    ">
+                        <span style="
+                            width:8px;
+                            height:8px;
+                            border-radius:50%;
+                            background:{cor_dot};
+                            display:inline-block;
+                        "></span>
+                    {status_atendente}
+                    </div>
+                    """,
                         unsafe_allow_html=True,
                     )
 
