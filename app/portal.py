@@ -1050,12 +1050,16 @@ def agrupar_solicitacoes_por_cliente(solicitacoes):
 
 
 def montar_url_convite(token_convite):
-    base_url = obter_app_base_url()
+    base_url = (
+        st.secrets.get("APP_BASE_URL")
+        or os.getenv("APP_BASE_URL", "")
+        or ""
+    ).strip()
 
     if not base_url:
         return f"?invite={quote_plus(token_convite)}"
 
-    base_url = base_url.strip().rstrip("/")
+    base_url = base_url.rstrip("/")
     return f"{base_url}/?invite={quote_plus(token_convite)}"
 
 
