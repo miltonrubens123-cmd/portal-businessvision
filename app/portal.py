@@ -1234,7 +1234,6 @@ st.sidebar.markdown("---")
 
 iniciais = st.session_state.usuario[:1].upper()
 
-
 st.sidebar.markdown(
     f"""
     <div style="
@@ -1257,6 +1256,7 @@ st.sidebar.markdown(
         ">
             {iniciais}
 
+               
         </div>
         <div>
             <div style="font-size:12px;color:#8FA5BC;">
