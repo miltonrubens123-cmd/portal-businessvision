@@ -976,72 +976,141 @@ def aplicar_estilo_app():
     st.markdown(
         """
         <style>
-        :root {
-            --bg: #071018;
-            --surface: #0D1722;
-            --border: rgba(148, 163, 184, 0.10);
-
-            /* TEXTO AJUSTADO (MENOS AZUL) */
-            --text-main: #E6EDF3;
-            --text-soft: #9AA4B2;
-            --text-muted: #6B7785;
-
-            --accent: #2F6FED;
+        .stApp {
+            background: linear-gradient(180deg, #020b16 0%, #04111f 100%);
+            color: #EAF2FF;
         }
 
-        .stApp {
-            background: linear-gradient(180deg, #071018 0%, #08131D 100%);
-            color: var(--text-main);
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
+
+        .block-container {
+            padding-top: 1.2rem;
+            padding-bottom: 2rem;
+            max-width: 1380px;
         }
 
         section[data-testid="stSidebar"] {
-            background: #08111C;
-            border-right: 1px solid var(--border);
+            background: linear-gradient(180deg, #03101d 0%, #051424 100%);
+            border-right: 1px solid rgba(120, 145, 170, 0.12);
+            min-width: 260px !important;
+            max-width: 260px !important;
         }
 
         section[data-testid="stSidebar"] * {
-            color: var(--text-main) !important;
+            color: #EAF2FF !important;
         }
 
+        section[data-testid="stSidebar"] button[kind="header"] {
+            display: none !important;
+        }
+
+        /* REMOVE RELEVO / CAIXAS EXAGERADAS */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        div[data-testid="stForm"] {
+            border: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
+        div[data-testid="stAlert"] {
+            border-radius: 12px !important;
+            border: 1px solid rgba(120, 145, 170, 0.14) !important;
+            box-shadow: none !important;
+        }
+
+        details {
+            background: rgba(255,255,255,0.02) !important;
+            border: 1px solid rgba(120, 145, 170, 0.14) !important;
+            border-radius: 12px !important;
+            box-shadow: none !important;
+        }
+
+        /* INPUTS MAIS LIMPOS */
+        .stTextInput > div > div > input,
+        .stTextArea textarea,
+        .stSelectbox > div > div,
+        .stNumberInput input {
+            background: rgba(255,255,255,0.03) !important;
+            color: #EAF2FF !important;
+            border: 1px solid rgba(120, 145, 170, 0.18) !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+        }
+
+        .stTextInput > div > div > input:focus,
+        .stTextArea textarea:focus,
+        .stSelectbox > div > div:focus-within,
+        .stNumberInput input:focus {
+            border: 1px solid rgba(88, 145, 255, 0.45) !important;
+            box-shadow: 0 0 0 1px rgba(88, 145, 255, 0.10) !important;
+        }
+
+        /* REMOVE LINHAS E BLOCOS BRANCOS ESTRANHOS */
+        hr {
+            border-color: rgba(120, 145, 170, 0.12) !important;
+        }
+
+        .element-container:has(hr) {
+            margin-top: 0.2rem !important;
+            margin-bottom: 0.6rem !important;
+        }
+
+        /* TIPOGRAFIA */
         h1, h2, h3 {
-            color: var(--text-main) !important;
+            color: #F7FBFF !important;
             font-weight: 700 !important;
+            letter-spacing: -0.02em;
         }
 
-        /* 🔥 AQUI ESTÁ O AJUSTE PRINCIPAL */
         p, label, .stCaption, .stMarkdown, .stText {
-            color: var(--text-soft) !important;
+            color: #9FB2C8 !important;
         }
 
         strong, b {
-            color: var(--text-main) !important;
+            color: #F7FBFF !important;
         }
 
-        hr {
-            border-color: rgba(148,163,184,0.08) !important;
-        }
-
-        .stTextInput input,
-        .stTextArea textarea,
-        .stSelectbox div {
-            background: rgba(255,255,255,0.02) !important;
-            color: var(--text-main) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 10px !important;
-        }
-
+        /* BOTÕES */
         .stButton > button {
+            width: 100%;
             border-radius: 10px;
             font-weight: 700;
-            border: 1px solid rgba(47,111,237,0.30);
-            background: linear-gradient(180deg, #214D9C 0%, #183D7A 100%);
-            color: white;
+            border: 1px solid rgba(84, 138, 226, 0.28);
+            background: linear-gradient(180deg, #17427A 0%, #10335F 100%);
+            color: #FFFFFF;
+            box-shadow: none;
         }
 
         .stButton > button:hover {
-            background: linear-gradient(180deg, #285CB8 0%, #1D478B 100%);
+            background: linear-gradient(180deg, #1C4C8E 0%, #123B6C 100%);
+            border: 1px solid rgba(110, 164, 255, 0.34);
         }
 
+        /* DATAFRAME */
+        div[data-testid="stDataFrame"] {
+            background: rgba(255,255,255,0.02) !important;
+            border: 1px solid rgba(120, 145, 170, 0.12) !important;
+            border-radius: 12px !important;
+            box-shadow: none !important;
+        }
+
+        /* ESCONDE CONTROLE DE COLAPSAR SIDEBAR */
+        button[title="Collapse sidebar"],
+        button[title="Expand sidebar"] {
+            display: none !important;
+        }
+
+        /* AJUSTE GERAL DE ESPAÇAMENTO */
+        .stMarkdown {
+            margin-bottom: 0.3rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1098,15 +1167,57 @@ try:
 except ValueError:
     default_idx = 0
 
-menu = st.sidebar.selectbox("Menu", menu_options, index=default_idx, key="menu_select")
+menu_icons = {
+    "Nova Solicitação": "➕",
+    "Demandas Solicitadas": "📋",
+    "Dashboard": "📊",
+    "Cadastro de Clientes": "👥",
+}
+
+st.sidebar.markdown("### Menu")
+
+menu_labels = [f"{menu_icons.get(op, '•')}  {op}" for op in menu_options]
+mapa_menu = {f"{menu_icons.get(op, '•')}  {op}": op for op in menu_options}
+
+menu_escolhido = st.sidebar.radio(
+    "",
+    menu_labels,
+    index=default_idx,
+    key="menu_radio",
+    label_visibility="collapsed",
+)
+
+menu = mapa_menu[menu_escolhido]
 st.session_state.menu_atual = menu
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
+st.sidebar.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown(f"👤 Usuário: **{st.session_state.usuario}**")
-if st.sidebar.button("Trocar usuário"):
-    logout()
+st.sidebar.markdown(
+    f"""
+    <div style="position:fixed; left:18px; bottom:22px; width:220px;">
+        <div style="
+            font-size:13px;
+            color:#8FA5BC;
+            margin-bottom:6px;
+        ">Usuário atual</div>
+        <div style="
+            font-size:15px;
+            font-weight:700;
+            color:#F7FBFF;
+            margin-bottom:10px;
+            word-break:break-word;
+        ">{st.session_state.usuario}</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.sidebar.markdown("<div style='height:84px'></div>", unsafe_allow_html=True)
+with st.sidebar:
+    if st.button("↩ Trocar usuário", use_container_width=True):
+        logout()
 
 
 # ----------------------------
