@@ -169,55 +169,86 @@ def enviar_email_convite(destinatario, nome, link):
     assunto = "Convite - Portal Business Vision"
 
     html_body = f"""
-    <html>
-      <body style="margin:0; padding:0; background:#0B1E33; font-family:Arial, sans-serif;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="background:#0B1E33; padding:20px;">
-          <tr>
-            <td align="center">
-              <table width="500" cellpadding="0" cellspacing="0" style="background:#0F2744; border-radius:10px; padding:30px;">
+<html>
+  <body style="margin:0; padding:0; background:#0B1E33;">
 
-                <tr>
-                  <td align="center" style="padding-bottom:20px;">
-                    <img src="https://raw.githubusercontent.com/miltonrubens123-cmd/portal-businessvision/main/app/imagens/logo.png" width="120" />
-                  </td>
-                </tr>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0B1E33; padding:30px 0;">
+      <tr>
+        <td align="center">
 
-                <tr>
-                  <td style="color:#ffffff; font-size:20px; text-align:center;">
-                    Convite para acesso ao portal
-                  </td>
-                </tr>
+          <table width="500" cellpadding="0" cellspacing="0" style="background:#0F2744; border-radius:10px; padding:30px;">
 
-                <tr>
-                  <td style="color:#cfe3ff; font-size:14px; text-align:center;">
-                    Olá, {nome}.<br><br>
-                    Você recebeu um convite para concluir seu cadastro.
-                  </td>
-                </tr>
+            <!-- LOGO -->
+            <tr>
+              <td align="center" style="padding-bottom:20px;">
+                <img src="SUA_URL_DA_LOGO_AQUI" width="100" />
+              </td>
+            </tr>
 
-                <tr>
-                  <td align="center" style="padding:25px 0;">
-                    <a href="{link}"
-                       style="background:#17427A;color:#fff;padding:14px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">
-                       Concluir cadastro
-                    </a>
-                  </td>
-                </tr>
+            <!-- TÍTULO -->
+            <tr>
+              <td align="center" style="color:#ffffff; font-size:20px; font-weight:bold;">
+                Convite para acesso ao portal
+              </td>
+            </tr>
 
-                <tr>
-                  <td style="color:#8fb3ff; font-size:12px; text-align:center;">
-                    Link direto:<br>
-                    <span style="word-break:break-all;">{link}</span>
-                  </td>
-                </tr>
+            <!-- TEXTO -->
+            <tr>
+              <td align="center" style="color:#cfe3ff; font-size:14px; padding-top:15px;">
+                Olá, {nome}.<br><br>
+                Você recebeu um convite para concluir seu cadastro no Business Vision.
+              </td>
+            </tr>
 
-              </table>
-            </td>
-          </tr>
-        </table>
-      </body>
-    </html>
-    """
+            <!-- BOTÃO -->
+            <tr>
+              <td align="center" style="padding:25px 0;">
+                <a href="{link}" 
+                   style="background:#17427A;
+                          color:#ffffff;
+                          padding:12px 20px;
+                          text-decoration:none;
+                          border-radius:6px;
+                          font-weight:bold;
+                          display:inline-block;">
+                  Concluir cadastro
+                </a>
+              </td>
+            </tr>
+
+            <!-- LINK -->
+            <tr>
+              <td align="center" style="color:#8fb3ff; font-size:12px;">
+                Caso o botão não funcione, copie o link:<br><br>
+                <span style="word-break:break-all;">{link}</span>
+              </td>
+            </tr>
+
+            <!-- DIVISOR -->
+            <tr>
+              <td style="padding:25px 0;">
+                <hr style="border:0; border-top:1px solid #1f3b5c;">
+              </td>
+            </tr>
+
+            <!-- RODAPÉ -->
+            <tr>
+              <td align="center" style="color:#7ea6d9; font-size:12px;">
+                Business Vision<br>
+                Plataforma de gestão de demandas<br><br>
+                Este e-mail foi enviado automaticamente.
+              </td>
+            </tr>
+
+          </table>
+
+        </td>
+      </tr>
+    </table>
+
+  </body>
+</html>
+"""
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = assunto
