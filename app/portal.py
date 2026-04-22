@@ -661,17 +661,6 @@ def render_status_legenda():
         st.markdown(render_status_badge("Concluído"), unsafe_allow_html=True)
 
 
-def formatar_status_texto(status):
-    status = normalizar_status(status)
-    status_map = {
-        "Em análise": "🔴 Em análise",
-        "Em atendimento": "🟢 Em atendimento",
-        "Aguardando cliente": "🟡 Aguardando cliente",
-        "Concluído": "🔵 Concluído",
-    }
-    return status_map.get(status, status)
-
-
 def obter_clientes_ativos():
     return conn.execute(
         """
@@ -1164,7 +1153,10 @@ with header_title_col:
         unsafe_allow_html=True,
     )
 
-st.markdown("<hr style='border:1px solid #333; margin-top:0;'>", unsafe_allow_html=True)
+st.markdown(
+    "<hr style='border:1px solid rgba(120,145,170,0.12); margin-top:0;'>",
+    unsafe_allow_html=True,
+)
 st.caption("Gestão de demandas e acompanhamento em tempo real")
 
 
@@ -1534,12 +1526,9 @@ if menu == "Nova Solicitação":
 # ----------------------------
 elif menu == "Demandas Solicitadas":
     st.header("Demandas Solicitadas")
-    st.markdown(
-        "<div class='bv-page-subtitle'>Acompanhe solicitações, filtre registros e consulte o histórico operacional.</div>",
-        unsafe_allow_html=True,
+    st.caption(
+        "Acompanhe solicitações, filtre registros e consulte o histórico operacional."
     )
-
-    st.markdown("<div class='bv-filter-wrap'>", unsafe_allow_html=True)
 
     top1, top2 = st.columns([6, 1.2])
     with top2:
@@ -2097,8 +2086,51 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                     st.write(f"CPF: {cli['cpf'] or ''}")
 
                 with col4:
-                    status_cliente = "🟢 Ativo" if bool(cli["ativo"]) else "🔴 Inativo"
-                    st.write(status_cliente)
+                    status_cliente = "Ativo" if bool(cli["ativo"]) else "Inativo"
+
+                    style_status = {
+                        "Ativo": {
+                            "bg": "#ECFDF3",
+                            "border": "#CDEAD8",
+                            "text": "#027A48",
+                            "dot": "#12B76A",
+                        },
+                        "Inativo": {
+                            "bg": "#FEF3F2",
+                            "border": "#F3C7C2",
+                            "text": "#B42318",
+                            "dot": "#F04438",
+                        },
+                    }
+
+                    s = style_status[status_cliente]
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            display:inline-flex;
+                            align-items:center;
+                            gap:8px;
+                            padding:6px 10px;
+                            border-radius:999px;
+                            background:{s['bg']};
+                            border:1px solid {s['border']};
+                            color:{s['text']};
+                            font-size:12px;
+                            font-weight:700;
+                        ">
+                            <span style="
+                                width:8px;
+                                height:8px;
+                                border-radius:50%;
+                                background:{s['dot']};
+                                display:inline-block;
+                            "></span>
+                            {status_cliente}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
                 with col5:
                     b1, b2, b3 = st.columns(3)
