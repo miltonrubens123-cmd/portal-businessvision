@@ -1254,12 +1254,9 @@ st.sidebar.markdown(
             font-weight:700;
             color:white;
         ">
-
-
-
-        
             {iniciais}
         </div>
+        
         <div>
             <div style="font-size:12px;color:#8FA5BC;">
                 Usuário atual
