@@ -977,49 +977,104 @@ def aplicar_estilo_app():
         """
         <style>
         :root {
-            --bg: #EEF2F6;
+            --bg: #F4F6F8;
             --surface: #FFFFFF;
-            --border: #E3E8EF;
+            --border: #E6EAF0;
+
             --text-main: #1F2937;
-            --text-soft: #667085;
+            --text-soft: #6B7280;
+            --text-muted: #9CA3AF;
+
+            --accent: #2563EB;
         }
 
         .stApp {
-            background: linear-gradient(180deg, #EEF2F6 0%, #F6F8FB 100%);
+            background: var(--bg);
             color: var(--text-main);
         }
 
-        .bv-filter-wrap {
-            background: #F8FAFC;
-            border: 1px solid #E3E8EF;
-            border-radius: 16px;
-            padding: 14px;
-            margin-bottom: 18px;
-        }
-
-        .bv-demand-card {
+        /* SIDEBAR */
+        section[data-testid="stSidebar"] {
             background: #FFFFFF;
-            border: 1px solid #E3E8EF;
-            border-radius: 16px;
-            padding: 18px;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+            border-right: 1px solid var(--border);
         }
 
+        section[data-testid="stSidebar"] * {
+            color: var(--text-main) !important;
+        }
+
+        /* TITULOS */
+        h1, h2, h3 {
+            color: var(--text-main) !important;
+            font-weight: 700 !important;
+        }
+
+        /* TEXTOS */
+        p, label, .stCaption, .stMarkdown, .stText {
+            color: var(--text-soft) !important;
+        }
+
+        strong, b {
+            color: var(--text-main) !important;
+        }
+
+        /* LINHAS */
+        hr {
+            border-color: var(--border) !important;
+        }
+
+        /* INPUTS */
         .stTextInput input,
+        .stTextArea textarea,
         .stSelectbox div {
             background: #FFFFFF !important;
-            border: 1px solid #DCE3EB !important;
-            color: #1F2937 !important;
+            color: var(--text-main) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 10px !important;
+        }
+
+        /* BOTÕES */
+        .stButton > button {
+            border-radius: 10px;
+            font-weight: 700;
+            border: none;
+            background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
+            color: white;
+        }
+
+        .stButton > button:hover {
+            background: linear-gradient(180deg, #1D4ED8 0%, #1E40AF 100%);
+        }
+
+        /* CARDS (onde você usa container border=True) */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: var(--surface);
+            border: 1px solid var(--border) !important;
+            border-radius: 14px !important;
+            padding: 12px;
+        }
+
+        /* DATAFRAME */
+        div[data-testid="stDataFrame"] {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        /* EXPANDER */
+        details {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        /* ALERTA */
+        div[data-testid="stAlert"] {
+            border-radius: 12px;
+            border: 1px solid var(--border);
         }
 
         </style>
-        .stTextInput input,
-        .stSelectbox div {
-            background: #FFFFFF !important;
-            border: 1px solid #DCE3EB !important;
-            color: #1F2937 !important;
-        }
         """,
         unsafe_allow_html=True,
     )
