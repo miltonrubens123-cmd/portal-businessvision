@@ -973,6 +973,15 @@ if not st.session_state.logado:
 
 
 def aplicar_estilo_app():
+
+    ICONS = {
+        "dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/></svg>',
+        "demandas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
+        "nova": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
+        "clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="currentColor" stroke-width="1.8"/></svg>',
+        "usuario": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.8"/></svg>',
+    }
+
     st.markdown(
         """
         <style>
@@ -1153,7 +1162,12 @@ menu_options_admin = [
     "Dashboard",
     "Cadastro de Clientes",
 ]
-menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
+
+menu_options_cliente = [
+    "Nova Solicitação",
+    "Demandas Solicitadas",
+]
+
 menu_options = (
     menu_options_admin
     if st.session_state.usuario == admin_user
@@ -1167,58 +1181,133 @@ try:
 except ValueError:
     default_idx = 0
 
-menu_icons = {
-    "Nova Solicitação": "➕",
-    "Demandas Solicitadas": "📋",
-    "Dashboard": "📊",
-    "Cadastro de Clientes": "👥",
+
+# ----------------------------
+# ICONES (SVG PADRÃO)
+# ----------------------------
+ICONS = {
+    "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
+    "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
+    "Dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/></svg>',
+    "Cadastro de Clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="currentColor" stroke-width="1.8"/></svg>',
 }
 
-st.sidebar.markdown("### Menu")
 
-menu_labels = [f"{menu_icons.get(op, '•')}  {op}" for op in menu_options]
-mapa_menu = {f"{menu_icons.get(op, '•')}  {op}": op for op in menu_options}
+# ----------------------------
+# CSS MENU
+# ----------------------------
+st.sidebar.markdown(
+    """
+<style>
+.menu-item {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 12px;
+    border-radius:10px;
+    font-size:14px;
+    color:#EAF2FF;
+    transition: all 0.15s ease;
+}
 
-menu_escolhido = st.sidebar.radio(
-    "",
-    menu_labels,
-    index=default_idx,
-    key="menu_radio",
-    label_visibility="collapsed",
+.menu-item:hover {
+    background: rgba(255,255,255,0.06);
+}
+
+.menu-item.active {
+    background: #1D3B63;
+}
+
+.menu-icon {
+    opacity:0.85;
+}
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
-menu = mapa_menu[menu_escolhido]
-st.session_state.menu_atual = menu
+
+# ----------------------------
+# MENU RENDER
+# ----------------------------
+st.sidebar.markdown("### Menu")
+
+menu = None
+
+for i, nome in enumerate(menu_options):
+    is_active = nome == st.session_state.get("menu_atual")
+
+    btn = st.sidebar.button(nome, key=f"menu_{i}", use_container_width=True)
+
+    st.sidebar.markdown(
+        f"""
+        <div class="menu-item {'active' if is_active else ''}"
+             style="margin-top:-38px; margin-left:10px; pointer-events:none;">
+            <span class="menu-icon">{ICONS.get(nome, "")}</span>
+            <span>{nome}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if btn:
+        st.session_state.menu_atual = nome
+        menu = nome
+
+
+# garante menu selecionado
+menu = st.session_state.get("menu_atual", menu_options[0])
+
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
-st.sidebar.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-st.sidebar.markdown("---")
+
+# ----------------------------
+# USUARIO (PADRÃO MOCK)
+# ----------------------------
+iniciais = st.session_state.usuario[:2].upper()
+
 st.sidebar.markdown(
     f"""
-    <div style="position:fixed; left:18px; bottom:22px; width:220px;">
-        <div style="
-            font-size:13px;
-            color:#8FA5BC;
-            margin-bottom:6px;
-        ">Usuário atual</div>
-        <div style="
-            font-size:15px;
-            font-weight:700;
-            color:#F7FBFF;
-            margin-bottom:10px;
-            word-break:break-word;
-        ">{st.session_state.usuario}</div>
+    <div style="
+        position:fixed;
+        bottom:90px;
+        left:18px;
+        width:220px;
+    ">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <div style="
+                width:38px;
+                height:38px;
+                border-radius:50%;
+                background:#1D4ED8;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-weight:700;
+                color:white;
+            ">
+                {iniciais}
+            </div>
+
+            <div>
+                <div style="font-size:12px;color:#8FA5BC;">
+                    Usuário atual
+                </div>
+                <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
+                    {st.session_state.usuario}
+                </div>
+            </div>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown("<div style='height:84px'></div>", unsafe_allow_html=True)
-with st.sidebar:
-    if st.button("↩ Trocar usuário", use_container_width=True):
-        logout()
+st.sidebar.markdown("<div style='height:120px'></div>", unsafe_allow_html=True)
 
+if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
+    logout()
 
 # ----------------------------
 # NOVA SOLICITAÇÃO
