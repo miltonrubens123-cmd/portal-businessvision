@@ -996,16 +996,18 @@ def obter_solicitacoes_filtradas(
             return []
 
     if cliente_id is not None:
-        filtros.append(
-            "(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.cliente = %s))"
-        )
-        params.extend([cliente_id, cliente_usuario or ""])
+        filtros.append("s.cliente_id = %s")
+        params.append(cliente_id)
     elif empresa_id is not None:
+
         filtros.append("s.empresa_id = %s")
         params.append(empresa_id)
     elif cliente_usuario:
-        filtros.append("s.cliente = %s")
-        params.append(cliente_usuario)
+        cliente_ref = obter_cliente_por_usuario(cliente_usuario)
+        if not cliente_ref:
+            return []
+        filtros.append("s.cliente_id = %s")
+        params.append(cliente_ref["id"])
 
     if status_filtro != "Todos":
         filtros.append(
