@@ -115,9 +115,7 @@ def obter_secret(path, default=None):
 
 def obter_admin_config():
     admin_user = (
-        obter_secret(["admin", "user"])
-        or os.getenv("ADMIN_USER")
-        or ""
+        obter_secret(["admin", "user"]) or os.getenv("ADMIN_USER") or ""
     ).strip()
 
     admin_password_hash = (
@@ -127,9 +125,7 @@ def obter_admin_config():
     ).strip()
 
     admin_password_plain = (
-        obter_secret(["admin", "password"])
-        or os.getenv("ADMIN_PASSWORD")
-        or ""
+        obter_secret(["admin", "password"]) or os.getenv("ADMIN_PASSWORD") or ""
     ).strip()
 
     return {
@@ -247,7 +243,6 @@ def validar_upload_imagem(arquivo):
 
 admin_config = obter_admin_config()
 admin_user = admin_config["user"]
-
 
 
 # ----------------------------
@@ -590,6 +585,7 @@ def formatar_status_texto(status):
     }
     return status_map.get(status, status)
 
+
 def obter_atendentes_ativos():
     return conn.execute(
         """
@@ -732,7 +728,9 @@ def obter_solicitacoes_filtradas(
     params = []
 
     if cliente_id is not None:
-        filtros.append("(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.s.cliente = %s))")
+        filtros.append(
+            "(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.s.cliente = %s))"
+        )
         params.extend([cliente_id, cliente_usuario or ""])
     elif empresa_id is not None:
         filtros.append("s.empresa_id = %s")
@@ -959,7 +957,6 @@ menu_options_admin = [
     "Demandas Solicitadas",
     "Dashboard",
     "Cadastro de Clientes",
-    "Cadastro de Atendentes",
 ]
 menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
 menu_options = (
@@ -968,21 +965,63 @@ menu_options = (
     else menu_options_cliente
 )
 
-try:
-    default_idx = menu_options.index(
-        st.session_state.get("menu_atual", "Nova Solicitação")
-    )
-except ValueError:
-    default_idx = 0
+ICONS = {
+    "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#DCE7F5" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+    "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#DCE7F5" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="#DCE7F5" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+    "Dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+    "Cadastro de Clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="#DCE7F5" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="#DCE7F5" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="#DCE7F5" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+}
 
-menu = st.sidebar.selectbox("Menu", menu_options, index=default_idx, key="menu_select")
+st.sidebar.markdown(
+    """
+    <style>
+    section[data-testid="stSidebar"] button[kind="secondary"],
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        border-radius: 12px !important;
+        min-height: 44px !important;
+        font-weight: 600 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.sidebar.markdown("### Menu")
+
+menu = st.session_state.get("menu_atual", "Nova Solicitação")
+if menu not in menu_options:
+    menu = menu_options[0]
+
+for nome in menu_options:
+    row = st.sidebar.container()
+    col_icon, col_btn = row.columns([0.18, 0.82], vertical_alignment="center")
+
+    with col_icon:
+        st.markdown(ICONS.get(nome, ""), unsafe_allow_html=True)
+
+    with col_btn:
+        label = nome
+        if nome == menu:
+            label = f"●  {nome}"
+        if st.button(label, key=f"menu_btn_{nome}", use_container_width=True):
+            menu = nome
+            st.session_state.menu_atual = nome
+            atualizar_menu_sessao(st.session_state.get("token_sessao"), nome)
+            persistir_query_params()
+            st.rerun()
+
 st.session_state.menu_atual = menu
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(f"👤 Usuário: **{st.session_state.usuario}**")
-if st.sidebar.button("Trocar usuário"):
+st.sidebar.caption("Usuário atual")
+st.sidebar.write(f"**{st.session_state.usuario}**")
+st.sidebar.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+
+if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
     logout()
 
 
@@ -1016,7 +1055,9 @@ if menu == "Nova Solicitação":
     else:
         cliente_usuario = st.session_state.usuario
         cliente_info = obter_cliente_por_usuario(cliente_usuario)
-        st.text_input("Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True)
+        st.text_input(
+            "Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True
+        )
 
     titulo = st.text_input("Título", key="titulo")
     descricao = st.text_area("Descrição", key="descricao")
@@ -1189,7 +1230,13 @@ elif menu == "Demandas Solicitadas":
     with f1:
         status_filtro = st.selectbox(
             "Filtrar por status",
-            ["Todos", "Em análise", "Em atendimento", "Aguardando cliente", "Concluído"],
+            [
+                "Todos",
+                "Em análise",
+                "Em atendimento",
+                "Aguardando cliente",
+                "Concluído",
+            ],
             index=0,
             key="filtro_status_demandas",
         )
@@ -1207,7 +1254,9 @@ elif menu == "Demandas Solicitadas":
             key="busca_demandas",
         )
 
-    st.caption("Exibindo no máximo 50 registros por cliente para preservar performance.")
+    st.caption(
+        "Exibindo no máximo 50 registros por cliente para preservar performance."
+    )
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1267,9 +1316,7 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
-                    render_anexos_como_arquivo(
-                        anexo_id, prefixo=f"cliente_{anexo_id}"
-                    )
+                    render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
         else:
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
@@ -1315,7 +1362,8 @@ elif menu == "Demandas Solicitadas":
 
                     if atendentes_ativos:
                         opcoes_atendentes = {
-                            atendente["nome"]: atendente["id"] for atendente in atendentes_ativos
+                            atendente["nome"]: atendente["id"]
+                            for atendente in atendentes_ativos
                         }
                         nomes_atendentes = list(opcoes_atendentes.keys())
                         indice_atendente = 0
@@ -1903,11 +1951,17 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
             key="novo_atendente_usuario",
         )
         email_atendente = st.text_input("E-mail", key="novo_atendente_email")
-        senha_atendente = st.text_input("Senha", type="password", key="novo_atendente_senha")
+        senha_atendente = st.text_input(
+            "Senha", type="password", key="novo_atendente_senha"
+        )
         ativo_atendente = st.checkbox("Ativo", value=True, key="novo_atendente_ativo")
 
         if st.button("Cadastrar Atendente"):
-            if not nome_atendente.strip() or not usuario_atendente.strip() or not senha_atendente.strip():
+            if (
+                not nome_atendente.strip()
+                or not usuario_atendente.strip()
+                or not senha_atendente.strip()
+            ):
                 st.error("Preencha nome, usuário e senha.")
             else:
                 existe = conn.execute(
@@ -1959,14 +2013,22 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                     b1, b2, b3 = st.columns(3)
                     with b1:
                         if bool(atendente["ativo"]):
-                            if st.button("Inativar", key=f"inativar_atendente_{atendente_id}", use_container_width=True):
+                            if st.button(
+                                "Inativar",
+                                key=f"inativar_atendente_{atendente_id}",
+                                use_container_width=True,
+                            ):
                                 conn.execute(
                                     "UPDATE atendentes SET ativo = FALSE WHERE id = %s",
                                     (atendente_id,),
                                 )
                                 st.rerun()
                         else:
-                            if st.button("Ativar", key=f"ativar_atendente_{atendente_id}", use_container_width=True):
+                            if st.button(
+                                "Ativar",
+                                key=f"ativar_atendente_{atendente_id}",
+                                use_container_width=True,
+                            ):
                                 conn.execute(
                                     "UPDATE atendentes SET ativo = TRUE WHERE id = %s",
                                     (atendente_id,),
@@ -1974,14 +2036,20 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 st.rerun()
 
                     with b2:
-                        if st.button("Excluir", key=f"excluir_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Excluir",
+                            key=f"excluir_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             possui_vinculo = conn.execute(
                                 "SELECT 1 FROM solicitacoes WHERE atendente_id = %s LIMIT 1",
                                 (atendente_id,),
                             ).fetchone()
 
                             if possui_vinculo:
-                                st.warning("Este atendente já está vinculado a solicitações. Inative ao invés de excluir.")
+                                st.warning(
+                                    "Este atendente já está vinculado a solicitações. Inative ao invés de excluir."
+                                )
                             else:
                                 conn.execute(
                                     "DELETE FROM atendentes WHERE id = %s",
@@ -1991,7 +2059,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 st.rerun()
 
                     with b3:
-                        if st.button("Alterar", key=f"alterar_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Alterar",
+                            key=f"alterar_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             st.session_state.atendente_editando_id = atendente_id
                             st.rerun()
 
@@ -2024,7 +2096,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
 
                     a1, a2 = st.columns(2)
                     with a1:
-                        if st.button("Salvar alteração", key=f"salvar_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Salvar alteração",
+                            key=f"salvar_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             if not novo_nome_at.strip() or not novo_usuario_at.strip():
                                 st.error("Preencha nome e usuário.")
                             else:
@@ -2034,7 +2110,9 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 ).fetchone()
 
                                 if usuario_existente:
-                                    st.error("Já existe outro atendente com esse usuário.")
+                                    st.error(
+                                        "Já existe outro atendente com esse usuário."
+                                    )
                                 else:
                                     if nova_senha_at.strip():
                                         conn.execute(
@@ -2071,7 +2149,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                     st.rerun()
 
                     with a2:
-                        if st.button("Cancelar alteração", key=f"cancelar_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Cancelar alteração",
+                            key=f"cancelar_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             st.session_state.atendente_editando_id = None
                             st.rerun()
     else:
