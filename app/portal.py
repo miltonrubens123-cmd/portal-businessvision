@@ -1064,14 +1064,14 @@ def agrupar_solicitacoes_por_cliente(solicitacoes):
 
 def montar_url_convite(token_convite):
     base_url = (
-        obter_secret(["APP_BASE_URL"]) or os.getenv("APP_BASE_URL", "") or ""
+        st.secrets.get("APP_BASE_URL") or os.getenv("APP_BASE_URL", "") or ""
     ).strip()
 
     if not base_url:
         return f"?invite={quote_plus(token_convite)}"
 
     separador = "&" if "?" in base_url else "?"
-    return f"{base_url}{separador}invite={quote_plus(token_convite)}"
+    return f"{base_url.rstrip('/')}{separador}invite={quote_plus(token_convite)}"
 
 
 def gerar_token_convite():
