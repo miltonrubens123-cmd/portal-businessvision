@@ -568,6 +568,17 @@ def formatar_status_texto(status):
     }
     return status_map.get(status, status)
 
+def obter_atendentes_por_empresa(empresa_id):
+    return conn.execute(
+        """
+        SELECT id, nome
+        FROM operadores
+        WHERE empresa_id = %s AND ativo = TRUE
+        ORDER BY nome
+        """,
+        (empresa_id,),
+    ).fetchall()
+
 
 def obter_clientes_ativos():
     return conn.execute(

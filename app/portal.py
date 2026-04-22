@@ -918,89 +918,23 @@ menu_options = (
     else menu_options_cliente
 )
 
-try:
-    default_idx = menu_options.index(
-        st.session_state.get("menu_atual", "Nova Solicitação")
-    )
-except ValueError:
-    default_idx = 0
-
 ICONS = {
-    "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
-    "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
-    "Dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.8"/></svg>',
-    "Cadastro de Clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="currentColor" stroke-width="1.8"/></svg>',
+    "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#DCE7F5" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+    "Demandas Solicitadas": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2" stroke="#DCE7F5" stroke-width="1.8"/><line x1="8" y1="7" x2="16" y2="7" stroke="#DCE7F5" stroke-width="1.8"/><line x1="8" y1="12" x2="16" y2="12" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+    "Dashboard": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="14" y="3" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="14" y="14" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/><rect x="3" y="14" width="7" height="7" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
+    "Cadastro de Clientes": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3" stroke="#DCE7F5" stroke-width="1.8"/><path d="M2 21c0-4 3-6 7-6" stroke="#DCE7F5" stroke-width="1.8"/><circle cx="17" cy="7" r="3" stroke="#DCE7F5" stroke-width="1.8"/><path d="M22 21c0-4-3-6-7-6" stroke="#DCE7F5" stroke-width="1.8"/></svg>',
 }
 
 st.sidebar.markdown(
     """
     <style>
-    section[data-testid="stSidebar"] {
-        min-width: 260px !important;
-        max-width: 260px !important;
-    }
-
-    div[role="radiogroup"] {
-        gap: 0.25rem;
-    }
-
-    div[role="radiogroup"] > label {
-        position: relative;
-        min-height: 46px;
-        margin-bottom: 8px;
-        border-radius: 12px;
-        border: 1px solid rgba(120,145,170,0.18);
-        background: transparent;
-        padding: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-
-    div[role="radiogroup"] > label:hover {
-        border: 1px solid rgba(120,145,170,0.30);
-        background: rgba(255,255,255,0.03);
-    }
-
-    div[role="radiogroup"] > label > div:first-child {
-        display: none !important;
-    }
-
-    div[role="radiogroup"] > label p {
-        display: none !important;
-    }
-
-    div[role="radiogroup"] > label[data-baseweb="radio"][aria-checked="true"] {
-        background: rgba(29,59,99,0.95) !important;
-        border: 1px solid rgba(84,138,226,0.35) !important;
-    }
-
-    .bv-menu-item {
-        display:flex;
-        align-items:center;
-        gap:10px;
-        height:46px;
-        padding:0 14px;
-        color:#EAF2FF;
-        font-size:14px;
-        font-weight:500;
-        pointer-events:none;
-        margin-top:-54px;
-        margin-bottom:8px;
-    }
-
-    .bv-menu-item.inactive {
-        color:#B8C7D9;
-    }
-
-    .bv-menu-icon {
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        width:18px;
-        height:18px;
-        color:currentColor;
-        flex-shrink:0;
-        opacity:0.92;
+    section[data-testid="stSidebar"] button[kind="secondary"],
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        text-align: left !important;
+        justify-content: flex-start !important;
+        border-radius: 12px !important;
+        min-height: 44px !important;
+        font-weight: 600 !important;
     }
     </style>
     """,
@@ -1009,72 +943,36 @@ st.sidebar.markdown(
 
 st.sidebar.markdown("### Menu")
 
-menu_escolhido = st.sidebar.radio(
-    "",
-    menu_options,
-    index=default_idx,
-    key="menu_radio_svg",
-    label_visibility="collapsed",
-)
+menu = st.session_state.get("menu_atual", "Nova Solicitação")
+if menu not in menu_options:
+    menu = menu_options[0]
 
 for nome in menu_options:
-    ativo = nome == menu_escolhido
-    st.sidebar.markdown(
-        f"""
-        <div class="bv-menu-item {'inactive' if not ativo else ''}">
-            <span class="bv-menu-icon">{ICONS.get(nome, '')}</span>
-            <span>{nome}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    row = st.sidebar.container()
+    col_icon, col_btn = row.columns([0.18, 0.82], vertical_alignment="center")
 
-menu = menu_escolhido
+    with col_icon:
+        st.markdown(ICONS.get(nome, ""), unsafe_allow_html=True)
+
+    with col_btn:
+        label = nome
+        if nome == menu:
+            label = f"●  {nome}"
+        if st.button(label, key=f"menu_btn_{nome}", use_container_width=True):
+            menu = nome
+            st.session_state.menu_atual = nome
+            atualizar_menu_sessao(st.session_state.get("token_sessao"), nome)
+            persistir_query_params()
+            st.rerun()
+
 st.session_state.menu_atual = menu
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
 persistir_query_params()
 
 st.sidebar.markdown("---")
-
-iniciais = (st.session_state.usuario or "US")[:2].upper()
-
-st.sidebar.markdown(
-    f"""
-    <div style="
-        display:flex;
-        align-items:center;
-        gap:10px;
-        margin-top:8px;
-        margin-bottom:14px;
-    ">
-        <div style="
-            width:42px;
-            height:42px;
-            border-radius:50%;
-            background:#2B59C3;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-weight:700;
-            color:white;
-            font-size:18px;
-            flex-shrink:0;
-        ">
-            {iniciais}
-        </div>
-
-        <div>
-            <div style="font-size:12px;color:#8FA5BC;line-height:1.2;">
-                Usuário atual
-            </div>
-            <div style="font-size:15px;font-weight:700;color:#EAF2FF;line-height:1.3;word-break:break-word;">
-                {st.session_state.usuario}
-            </div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.sidebar.caption("Usuário atual")
+st.sidebar.write(f"**{st.session_state.usuario}**")
+st.sidebar.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
 
 if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
     logout()
