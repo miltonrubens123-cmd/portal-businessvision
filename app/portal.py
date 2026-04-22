@@ -3109,3 +3109,6 @@ elif menu == "Painel de Cadastros" and perfil_atual == "admin":
                         f"Empresa: {convite.get('empresa_nome') or 'Sem empresa'} • "
                         f"Concluído em: {convite['utilizado_em'].strftime('%d/%m/%Y %H:%M') if convite['utilizado_em'] else '-'}"
                     )
+                    print(
+                        f"Convite ID {convite['id']} - Status: {convite['status']} - Criado em: {convite['created_at']}"
+                    )
