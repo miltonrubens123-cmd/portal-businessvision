@@ -1264,7 +1264,6 @@ st.sidebar.markdown(
         ">
             {iniciais}
 
-               
         </div>
         <div>
             <div style="font-size:12px;color:#8FA5BC;">
