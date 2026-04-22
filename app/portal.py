@@ -1183,7 +1183,7 @@ except ValueError:
 
 
 # ----------------------------
-# ICONES (SVG PADRÃO)
+# ICONES SVG
 # ----------------------------
 ICONS = {
     "Nova Solicitação": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.8"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.8"/></svg>',
@@ -1194,41 +1194,7 @@ ICONS = {
 
 
 # ----------------------------
-# CSS MENU
-# ----------------------------
-st.sidebar.markdown(
-    """
-<style>
-.menu-item {
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:10px 12px;
-    border-radius:10px;
-    font-size:14px;
-    color:#EAF2FF;
-    transition: all 0.15s ease;
-}
-
-.menu-item:hover {
-    background: rgba(255,255,255,0.06);
-}
-
-.menu-item.active {
-    background: #1D3B63;
-}
-
-.menu-icon {
-    opacity:0.85;
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-
-# ----------------------------
-# MENU RENDER
+# MENU VISUAL
 # ----------------------------
 st.sidebar.markdown("### Menu")
 
@@ -1237,25 +1203,34 @@ menu = None
 for i, nome in enumerate(menu_options):
     is_active = nome == st.session_state.get("menu_atual")
 
-    btn = st.sidebar.button(nome, key=f"menu_{i}", use_container_width=True)
+    if st.sidebar.button(
+        nome,
+        key=f"menu_{i}",
+        use_container_width=True,
+    ):
+        st.session_state.menu_atual = nome
+        menu = nome
 
     st.sidebar.markdown(
         f"""
-        <div class="menu-item {'active' if is_active else ''}"
-             style="margin-top:-38px; margin-left:10px; pointer-events:none;">
-            <span class="menu-icon">{ICONS.get(nome, "")}</span>
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin-top:-32px;
+            margin-left:12px;
+            pointer-events:none;
+            color:{'#FFFFFF' if is_active else '#B8C7D9'};
+            font-weight:{'600' if is_active else '500'};
+        ">
+            {ICONS.get(nome, "")}
             <span>{nome}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    if btn:
-        st.session_state.menu_atual = nome
-        menu = nome
 
-
-# garante menu selecionado
 menu = st.session_state.get("menu_atual", menu_options[0])
 
 atualizar_menu_sessao(st.session_state.get("token_sessao"), menu)
@@ -1263,40 +1238,40 @@ persistir_query_params()
 
 
 # ----------------------------
-# USUARIO (PADRÃO MOCK)
+# USUARIO (PADRÃO LIMPO)
 # ----------------------------
+st.sidebar.markdown("---")
+
 iniciais = st.session_state.usuario[:2].upper()
 
 st.sidebar.markdown(
     f"""
     <div style="
-        position:fixed;
-        bottom:90px;
-        left:18px;
-        width:220px;
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin-top:10px;
     ">
-        <div style="display:flex; align-items:center; gap:10px;">
-            <div style="
-                width:38px;
-                height:38px;
-                border-radius:50%;
-                background:#1D4ED8;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                font-weight:700;
-                color:white;
-            ">
-                {iniciais}
-            </div>
+        <div style="
+            width:36px;
+            height:36px;
+            border-radius:50%;
+            background:#1D4ED8;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-weight:700;
+            color:white;
+        ">
+            {iniciais}
+        </div>
 
-            <div>
-                <div style="font-size:12px;color:#8FA5BC;">
-                    Usuário atual
-                </div>
-                <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
-                    {st.session_state.usuario}
-                </div>
+        <div>
+            <div style="font-size:12px;color:#8FA5BC;">
+                Usuário atual
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#EAF2FF;">
+                {st.session_state.usuario}
             </div>
         </div>
     </div>
@@ -1304,7 +1279,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.markdown("<div style='height:120px'></div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
 if st.sidebar.button("↩ Trocar usuário", use_container_width=True):
     logout()
