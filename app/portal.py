@@ -1232,7 +1232,16 @@ st.sidebar.markdown("---")
 # ----------------------------
 st.sidebar.markdown("---")
 
-iniciais = st.session_state.usuario[:1].upper()
+# gera iniciais (primeiro + último nome, tratando underscore)
+nome = (st.session_state.usuario or "").replace("_", " ").strip()
+partes = [p for p in nome.split() if p]
+
+if len(partes) >= 2:
+    iniciais = (partes[0][0] + partes[-1][0]).upper()
+elif len(partes) == 1:
+    iniciais = partes[0][:2].upper()
+else:
+    iniciais = "US"
 
 st.sidebar.markdown(
     f"""
