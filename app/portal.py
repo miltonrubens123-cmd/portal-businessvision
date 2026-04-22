@@ -1232,7 +1232,7 @@ st.sidebar.markdown("---")
 # ----------------------------
 st.sidebar.markdown("---")
 
-iniciais = st.session_state.usuario[:2].upper()
+iniciais = st.session_state.usuario[:1].upper()
 
 st.sidebar.markdown(
     f"""
