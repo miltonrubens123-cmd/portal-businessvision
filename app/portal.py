@@ -553,6 +553,114 @@ def normalizar_status(status):
     return mapa.get(status, status)
 
 
+def render_status_badge(status):
+    status = normalizar_status(status)
+
+    styles = {
+        "Em análise": {
+            "bg": "#EEF4FF",
+            "border": "#D0DDFB",
+            "text": "#1D4ED8",
+            "label": "Em análise",
+        },
+        "Em atendimento": {
+            "bg": "#ECFDF3",
+            "border": "#CDEAD8",
+            "text": "#027A48",
+            "label": "Em atendimento",
+        },
+        "Aguardando cliente": {
+            "bg": "#FFF7ED",
+            "border": "#F6DEC9",
+            "text": "#C2410C",
+            "label": "Aguardando cliente",
+        },
+        "Concluído": {
+            "bg": "#F2F4F7",
+            "border": "#E4E7EC",
+            "text": "#344054",
+            "label": "Concluído",
+        },
+    }
+
+    s = styles.get(status, styles["Em análise"])
+
+    return f"""
+    <div style="
+        display:inline-flex;
+        align-items:center;
+        padding:6px 10px;
+        border-radius:999px;
+        background:{s['bg']};
+        border:1px solid {s['border']};
+        color:{s['text']};
+        font-size:12px;
+        font-weight:700;
+        line-height:1;
+        white-space:nowrap;
+    ">
+        {s['label']}
+    </div>
+    """
+
+
+def render_prioridade_badge(prioridade):
+    prioridade = (prioridade or "").strip()
+
+    styles = {
+        "Alta": {
+            "bg": "#FEF3F2",
+            "border": "#F3C7C2",
+            "text": "#B42318",
+        },
+        "Média": {
+            "bg": "#FFF7ED",
+            "border": "#F6DEC9",
+            "text": "#C2410C",
+        },
+        "Baixa": {
+            "bg": "#F0FDF4",
+            "border": "#CDEAD8",
+            "text": "#15803D",
+        },
+    }
+
+    s = styles.get(
+        prioridade,
+        {"bg": "#F2F4F7", "border": "#E4E7EC", "text": "#475467"},
+    )
+
+    return f"""
+    <div style="
+        display:inline-flex;
+        align-items:center;
+        padding:6px 10px;
+        border-radius:999px;
+        background:{s['bg']};
+        border:1px solid {s['border']};
+        color:{s['text']};
+        font-size:12px;
+        font-weight:700;
+        line-height:1;
+        white-space:nowrap;
+    ">
+        {prioridade or 'Sem prioridade'}
+    </div>
+    """
+
+
+def render_status_legenda():
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(render_status_badge("Em análise"), unsafe_allow_html=True)
+    with c2:
+        st.markdown(render_status_badge("Em atendimento"), unsafe_allow_html=True)
+    with c3:
+        st.markdown(render_status_badge("Aguardando cliente"), unsafe_allow_html=True)
+    with c4:
+        st.markdown(render_status_badge("Concluído"), unsafe_allow_html=True)
+
+
 def formatar_status_texto(status):
     status = normalizar_status(status)
     status_map = {
@@ -871,13 +979,20 @@ def aplicar_estilo_app():
         :root {
             --bg: #F4F6F8;
             --surface: #FFFFFF;
+            --surface-soft: #FAFBFC;
             --border: #E6EAF0;
+            --border-soft: #EEF2F6;
 
             --text-main: #1F2937;
-            --text-soft: #6B7280;
-            --text-muted: #9CA3AF;
+            --text-soft: #667085;
+            --text-muted: #98A2B3;
 
             --accent: #2563EB;
+            --accent-hover: #1D4ED8;
+
+            --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+            --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.06);
+            --radius: 16px;
         }
 
         .stApp {
@@ -885,7 +1000,16 @@ def aplicar_estilo_app():
             color: var(--text-main);
         }
 
-        /* SIDEBAR */
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
+
+        .block-container {
+            padding-top: 1.25rem;
+            padding-bottom: 2rem;
+            max-width: 1380px;
+        }
+
         section[data-testid="stSidebar"] {
             background: #FFFFFF;
             border-right: 1px solid var(--border);
@@ -895,13 +1019,12 @@ def aplicar_estilo_app():
             color: var(--text-main) !important;
         }
 
-        /* TITULOS */
         h1, h2, h3 {
             color: var(--text-main) !important;
             font-weight: 700 !important;
+            letter-spacing: -0.02em;
         }
 
-        /* TEXTOS */
         p, label, .stCaption, .stMarkdown, .stText {
             color: var(--text-soft) !important;
         }
@@ -910,62 +1033,159 @@ def aplicar_estilo_app():
             color: var(--text-main) !important;
         }
 
-        /* LINHAS */
         hr {
             border-color: var(--border) !important;
         }
 
-        /* INPUTS */
-        .stTextInput input,
+        .stTextInput > div > div > input,
         .stTextArea textarea,
-        .stSelectbox div {
+        .stNumberInput input {
             background: #FFFFFF !important;
             color: var(--text-main) !important;
             border: 1px solid var(--border) !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
         }
 
-        /* BOTÕES */
+        .stTextInput > div > div > input:focus,
+        .stTextArea textarea:focus,
+        .stNumberInput input:focus {
+            border: 1px solid #B9CCF7 !important;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+        }
+
+        .stSelectbox > div > div {
+            background: #FFFFFF !important;
+            color: var(--text-main) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+        }
+
+        .stFileUploader > div {
+            background: #FFFFFF;
+            border: 1px dashed #D8E0EA;
+            border-radius: 14px;
+            padding: 12px;
+        }
+
         .stButton > button {
-            border-radius: 10px;
+            width: 100%;
+            border-radius: 12px;
             font-weight: 700;
             border: none;
             background: linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%);
             color: white;
+            box-shadow: none;
         }
 
         .stButton > button:hover {
             background: linear-gradient(180deg, #1D4ED8 0%, #1E40AF 100%);
         }
 
-        /* CARDS (onde você usa container border=True) */
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            background: var(--surface);
-            border: 1px solid var(--border) !important;
-            border-radius: 14px !important;
-            padding: 12px;
+        div[data-testid="stMetric"] {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: var(--shadow-sm);
         }
 
-        /* DATAFRAME */
         div[data-testid="stDataFrame"] {
-            background: white;
+            background: #FFFFFF;
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 14px;
+            padding: 6px;
         }
 
-        /* EXPANDER */
-        details {
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-        }
-
-        /* ALERTA */
         div[data-testid="stAlert"] {
-            border-radius: 12px;
-            border: 1px solid var(--border);
+            border-radius: 14px;
+            border: 1px solid var(--border) !important;
         }
 
+        details {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 4px 10px;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: #FFFFFF;
+            border: 1px solid var(--border) !important;
+            border-radius: 18px !important;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .bv-section-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 16px 18px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 12px;
+        }
+
+        .bv-page-subtitle {
+            color: var(--text-soft);
+            font-size: 14px;
+            margin-top: -4px;
+            margin-bottom: 12px;
+        }
+
+        .bv-filter-wrap {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 14px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 16px;
+        }
+
+        .bv-demand-card {
+            background: #FFFFFF;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 14px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .bv-demand-id {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475467;
+            letter-spacing: 0.04em;
+        }
+
+        .bv-demand-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #1F2937;
+            line-height: 1.3;
+            margin-bottom: 4px;
+        }
+
+        .bv-demand-desc {
+            font-size: 13px;
+            color: #667085;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .bv-meta {
+            font-size: 12px;
+            color: #667085;
+        }
+
+        .bv-meta strong {
+            color: #344054 !important;
+        }
+
+        .bv-client-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1F2937;
+            margin: 18px 0 10px 0;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1216,29 +1436,28 @@ if menu == "Nova Solicitação":
 # ----------------------------
 elif menu == "Demandas Solicitadas":
     st.header("Demandas Solicitadas")
+    st.markdown(
+        "<div class='bv-page-subtitle'>Acompanhe solicitações, filtre registros e consulte o histórico operacional.</div>",
+        unsafe_allow_html=True,
+    )
 
-    col_legenda1, col_legenda2 = st.columns([8, 1])
+    st.markdown("<div class='bv-filter-wrap'>", unsafe_allow_html=True)
 
-    with col_legenda2:
-        if st.button("📌 Legenda", use_container_width=True):
+    top1, top2 = st.columns([6, 1.2])
+    with top2:
+        if st.button("Ver status", use_container_width=True):
             st.session_state.mostrar_legenda = not st.session_state.get(
                 "mostrar_legenda", False
             )
 
     if st.session_state.get("mostrar_legenda", False):
-        st.info(
-            """
-🔴 Em análise  
-🟢 Em atendimento  
-🟡 Aguardando cliente  
-🔵 Concluído
-            """
-        )
+        render_status_legenda()
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
-    f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
+    f1, f2, f3 = st.columns([1.15, 1.15, 2.3])
     with f1:
         status_filtro = st.selectbox(
-            "Filtrar por status",
+            "Status",
             [
                 "Todos",
                 "Em análise",
@@ -1251,21 +1470,22 @@ elif menu == "Demandas Solicitadas":
         )
     with f2:
         prioridade_filtro = st.selectbox(
-            "Filtrar por prioridade",
+            "Prioridade",
             ["Todas", "Alta", "Média", "Baixa"],
             index=0,
             key="filtro_prioridade_demandas",
         )
     with f3:
         busca_filtro = st.text_input(
-            "Buscar por ID ou título",
-            placeholder="Ex.: 125 ou erro no relatório",
+            "Buscar",
+            placeholder="Digite o ID ou parte do título",
             key="busca_demandas",
         )
 
     st.caption(
         "Exibindo no máximo 50 registros por cliente para preservar performance."
     )
+    st.markdown("</div>", unsafe_allow_html=True)
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1301,153 +1521,231 @@ elif menu == "Demandas Solicitadas":
 
         encontrou_resultado = True
         nome_exibicao = cli["nome"] or cli["usuario"]
-        st.subheader(f"Cliente: {nome_exibicao} ({cli['usuario']})")
+        st.markdown(
+            f"<div class='bv-client-title'>Cliente: {nome_exibicao} ({cli['usuario']})</div>",
+            unsafe_allow_html=True,
+        )
 
         df_cli = pd.DataFrame(dados_cli)
 
         if st.session_state.usuario != admin_user:
-            df_exibicao = df_cli.copy()
-            df_exibicao["status"] = df_exibicao["status"].apply(formatar_status_texto)
-            df_exibicao["observacoes"] = df_exibicao["resposta"].fillna("")
-            df_exibicao = df_exibicao[
-                ["id", "titulo", "prioridade", "status", "observacoes", "data_criacao"]
-            ]
-            df_exibicao.columns = [
-                "ID",
-                "Título",
-                "Prioridade",
-                "Status",
-                "Observações",
-                "Data",
-            ]
-            st.dataframe(df_exibicao, use_container_width=True)
-
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
+                status_atual = normalizar_status(row["status"])
+
+                st.markdown("<div class='bv-demand-card'>", unsafe_allow_html=True)
+
+                top_a, top_b, top_c = st.columns([3.6, 1.4, 1.4])
+
+                with top_a:
+                    st.markdown(
+                        f"<div class='bv-demand-id'>SOLICITAÇÃO #{anexo_id}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<div class='bv-demand-title'>{row['titulo']}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<div class='bv-demand-desc'>{row['descricao']}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                with top_b:
+                    st.markdown(
+                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Prioridade</strong></div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        render_prioridade_badge(row["prioridade"]),
+                        unsafe_allow_html=True,
+                    )
+
+                with top_c:
+                    st.markdown(
+                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Status</strong></div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        render_status_badge(status_atual),
+                        unsafe_allow_html=True,
+                    )
+
+                st.markdown(
+                    f"<div class='bv-meta' style='margin-top:10px'><strong>Observações:</strong> {row['resposta'] if row['resposta'] else 'Sem observações registradas.'}</div>",
+                    unsafe_allow_html=True,
+                )
+
+                data_txt = (
+                    row["data_criacao"].strftime("%Y-%m-%d %H:%M:%S")
+                    if row["data_criacao"]
+                    else ""
+                )
+                st.markdown(
+                    f"<div class='bv-meta' style='margin-top:8px'><strong>Criado em:</strong> {data_txt}</div>",
+                    unsafe_allow_html=True,
+                )
+
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
                     render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
         else:
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
                 solicitacao_id = int(row["id"])
 
-                with st.container(border=True):
-                    c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.4, 1.5])
+                st.markdown("<div class='bv-demand-card'>", unsafe_allow_html=True)
 
-                    with c1:
-                        st.write(f"**#{solicitacao_id}**")
-                    with c2:
-                        st.write(f"**{row['titulo']}**")
-                        st.caption(row["descricao"])
-                    with c3:
-                        st.write(f"Prioridade: **{row['prioridade']}**")
-                    with c4:
-                        st.write(f"Status: **{formatar_status_texto(status_atual)}**")
-                    with c5:
-                        if row["complexidade"]:
-                            st.write(f"Complexidade: **{row['complexidade']}**")
+                top1, top2, top3 = st.columns([4.6, 1.6, 1.6])
 
-                    with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
-                        render_anexos_como_arquivo(
-                            solicitacao_id, prefixo=f"admin_{solicitacao_id}"
-                        )
-
-                    obs_key = f"obs_{solicitacao_id}"
-                    if obs_key not in st.session_state:
-                        st.session_state[obs_key] = (
-                            row["resposta"] if row["resposta"] else ""
-                        )
-
-                    st.text_area(
-                        "Observações",
-                        key=obs_key,
-                        height=90,
-                        placeholder="Digite aqui a observação para o cliente...",
+                with top1:
+                    st.markdown(
+                        f"<div class='bv-demand-id'>SOLICITAÇÃO #{solicitacao_id}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<div class='bv-demand-title'>{row['titulo']}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"<div class='bv-demand-desc'>{row['descricao']}</div>",
+                        unsafe_allow_html=True,
                     )
 
-                    ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1, 3.6])
+                with top2:
+                    st.markdown(
+                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Prioridade</strong></div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        render_prioridade_badge(row["prioridade"]),
+                        unsafe_allow_html=True,
+                    )
 
-                    if status_atual == "Em análise":
-                        with ac1:
-                            if st.button(
-                                "INICIAR",
-                                key=f"iniciar_{solicitacao_id}",
-                                use_container_width=True,
-                            ):
-                                atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Em atendimento",
-                                    st.session_state[obs_key],
-                                )
-                                st.rerun()
+                with top3:
+                    st.markdown(
+                        "<div class='bv-meta' style='margin-bottom:6px'><strong>Status</strong></div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        render_status_badge(status_atual),
+                        unsafe_allow_html=True,
+                    )
 
-                    elif status_atual == "Em atendimento":
-                        with ac1:
-                            if st.button(
-                                "AGUARDAR CLIENTE",
-                                key=f"aguardar_{solicitacao_id}",
-                                use_container_width=True,
-                            ):
-                                atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Aguardando cliente",
-                                    st.session_state[obs_key],
-                                )
-                                st.rerun()
-                        with ac2:
-                            if st.button(
-                                "FINALIZAR",
-                                key=f"finalizar_{solicitacao_id}",
-                                use_container_width=True,
-                            ):
-                                atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Concluído",
-                                    st.session_state[obs_key],
-                                )
-                                st.rerun()
+                if row["complexidade"]:
+                    st.markdown(
+                        f"<div class='bv-meta' style='margin-top:4px'><strong>Complexidade:</strong> {row['complexidade']}</div>",
+                        unsafe_allow_html=True,
+                    )
 
-                    elif status_atual == "Aguardando cliente":
-                        with ac1:
-                            if st.button(
-                                "RETOMAR",
-                                key=f"retomar_{solicitacao_id}",
-                                use_container_width=True,
-                            ):
-                                atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Em atendimento",
-                                    st.session_state[obs_key],
-                                )
-                                st.rerun()
-                        with ac2:
-                            if st.button(
-                                "FINALIZAR",
-                                key=f"finalizar_aguardando_{solicitacao_id}",
-                                use_container_width=True,
-                            ):
-                                atualizar_solicitacao(
-                                    solicitacao_id,
-                                    "Concluído",
-                                    st.session_state[obs_key],
-                                )
-                                st.rerun()
-                    else:
-                        st.success("Demanda concluída.")
+                with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
+                    render_anexos_como_arquivo(
+                        solicitacao_id, prefixo=f"admin_{solicitacao_id}"
+                    )
 
-                    meta1, meta2, meta3 = st.columns(3)
-                    with meta1:
-                        st.caption(
-                            f"Criado em: {row['data_criacao'].strftime('%Y-%m-%d %H:%M:%S') if row['data_criacao'] else ''}"
-                        )
-                    with meta2:
-                        st.caption(
-                            f"Início: {row['inicio_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['inicio_atendimento'] else ''}"
-                        )
-                    with meta3:
-                        st.caption(
-                            f"Fim: {row['fim_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['fim_atendimento'] else ''}"
-                        )
+                obs_key = f"obs_{solicitacao_id}"
+                if obs_key not in st.session_state:
+                    st.session_state[obs_key] = (
+                        row["resposta"] if row["resposta"] else ""
+                    )
+
+                st.text_area(
+                    "Observações",
+                    key=obs_key,
+                    height=100,
+                    placeholder="Digite aqui a observação para o cliente...",
+                )
+
+                ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1.2, 3.4])
+
+                if status_atual == "Em análise":
+                    with ac1:
+                        if st.button(
+                            "Iniciar",
+                            key=f"iniciar_{solicitacao_id}",
+                            use_container_width=True,
+                        ):
+                            atualizar_solicitacao(
+                                solicitacao_id,
+                                "Em atendimento",
+                                st.session_state[obs_key],
+                            )
+                            st.rerun()
+
+                elif status_atual == "Em atendimento":
+                    with ac1:
+                        if st.button(
+                            "Aguardar cliente",
+                            key=f"aguardar_{solicitacao_id}",
+                            use_container_width=True,
+                        ):
+                            atualizar_solicitacao(
+                                solicitacao_id,
+                                "Aguardando cliente",
+                                st.session_state[obs_key],
+                            )
+                            st.rerun()
+                    with ac2:
+                        if st.button(
+                            "Finalizar",
+                            key=f"finalizar_{solicitacao_id}",
+                            use_container_width=True,
+                        ):
+                            atualizar_solicitacao(
+                                solicitacao_id,
+                                "Concluído",
+                                st.session_state[obs_key],
+                            )
+                            st.rerun()
+
+                elif status_atual == "Aguardando cliente":
+                    with ac1:
+                        if st.button(
+                            "Retomar",
+                            key=f"retomar_{solicitacao_id}",
+                            use_container_width=True,
+                        ):
+                            atualizar_solicitacao(
+                                solicitacao_id,
+                                "Em atendimento",
+                                st.session_state[obs_key],
+                            )
+                            st.rerun()
+                    with ac2:
+                        if st.button(
+                            "Finalizar",
+                            key=f"finalizar_aguardando_{solicitacao_id}",
+                            use_container_width=True,
+                        ):
+                            atualizar_solicitacao(
+                                solicitacao_id,
+                                "Concluído",
+                                st.session_state[obs_key],
+                            )
+                            st.rerun()
+                else:
+                    st.success("Demanda concluída.")
+
+                meta1, meta2, meta3 = st.columns(3)
+                with meta1:
+                    st.markdown(
+                        f"<div class='bv-meta'><strong>Criado em:</strong> {row['data_criacao'].strftime('%Y-%m-%d %H:%M:%S') if row['data_criacao'] else ''}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with meta2:
+                    st.markdown(
+                        f"<div class='bv-meta'><strong>Início:</strong> {row['inicio_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['inicio_atendimento'] else ''}</div>",
+                        unsafe_allow_html=True,
+                    )
+                with meta3:
+                    st.markdown(
+                        f"<div class='bv-meta'><strong>Fim:</strong> {row['fim_atendimento'].strftime('%Y-%m-%d %H:%M:%S') if row['fim_atendimento'] else ''}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                st.markdown("</div>", unsafe_allow_html=True)
 
     if not encontrou_resultado:
         st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
