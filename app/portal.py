@@ -65,13 +65,27 @@ class SafeConnProxy:
 
 
 def run_query(sql, params=None, fetchone=False, fetchall=False):
-    with get_conn().cursor() as cur:
-        cur.execute(sql, params or ())
-        if fetchone:
-            return cur.fetchone()
-        if fetchall:
-            return cur.fetchall()
-        return None
+    try:
+        with get_conn().cursor() as cur:
+            cur.execute(sql, params or ())
+            if fetchone:
+                return cur.fetchone()
+            if fetchall:
+                return cur.fetchall()
+            return None
+    except Exception:
+        reset_connection()
+        with get_conn().cursor() as cur:
+            cur.execute(sql, params or ())
+            if fetchone:
+                return cur.fetchone()
+            if fetchall:
+                return cur.fetchall()
+            return None
+
+
+if st.button("Atualizar portal", use_container_width=True):
+    st.rerun()
 
 
 def formatar_cnpj(cnpj):
