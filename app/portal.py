@@ -15,6 +15,7 @@ from PIL import Image
 import psycopg
 from zoneinfo import ZoneInfo
 from psycopg.rows import dict_row
+import re
 
 
 @st.cache_resource
@@ -74,6 +75,48 @@ def run_query(sql, params=None, fetchone=False, fetchall=False):
         return None
 
 
+def autenticar_usuario(usuario_digitado, senha_digitada):
+    user = conn.execute(
+        """
+        SELECT id, usuario, senha_hash, perfil, ativo
+        FROM usuarios
+        WHERE usuario = %s
+        LIMIT 1
+        """,
+        (usuario_digitado,),
+    ).fetchone()
+
+    if not user or not user["ativo"]:
+        return None
+
+    if verificar_senha(senha_digitada, user["senha_hash"]):
+        return user
+
+    return None
+
+
+def formatar_cnpj(cnpj):
+    cnpj = re.sub(r"\D", "", cnpj)
+    if len(cnpj) == 14:
+        return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
+    return cnpj
+
+
+def formatar_cpf(cpf):
+    cpf = re.sub(r"\D", "", cpf)
+    if len(cpf) == 11:
+        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+    return cpf
+
+
+def validar_cnpj(cnpj):
+    return len(re.sub(r"\D", "", cnpj)) == 14
+
+
+def validar_cpf(cpf):
+    return len(re.sub(r"\D", "", cpf)) == 11
+
+
 # ----------------------------
 # CONFIGURAÇÃO INICIAL
 # ----------------------------
@@ -118,9 +161,7 @@ def obter_secret(path, default=None):
 
 def obter_admin_config():
     admin_user = (
-        obter_secret(["admin", "user"])
-        or os.getenv("ADMIN_USER")
-        or ""
+        obter_secret(["admin", "user"]) or os.getenv("ADMIN_USER") or ""
     ).strip()
 
     admin_password_hash = (
@@ -130,9 +171,7 @@ def obter_admin_config():
     ).strip()
 
     admin_password_plain = (
-        obter_secret(["admin", "password"])
-        or os.getenv("ADMIN_PASSWORD")
-        or ""
+        obter_secret(["admin", "password"]) or os.getenv("ADMIN_PASSWORD") or ""
     ).strip()
 
     return {
@@ -248,9 +287,16 @@ def validar_upload_imagem(arquivo):
     return True, ""
 
 
+def validar_cnpj(cnpj):
+    return len(re.sub(r"\D", "", cnpj)) == 14
+
+
+def validar_cpf(cpf):
+    return len(re.sub(r"\D", "", cpf)) == 11
+
+
 admin_config = obter_admin_config()
 admin_user = admin_config["user"]
-
 
 
 # ----------------------------
@@ -584,13 +630,23 @@ def paginar_registros(registros, state_key, page_size=12):
 
     nav1, nav2, nav3 = st.columns([1, 1.3, 1])
     with nav1:
-        if st.button("← Anterior", key=f"{state_key}_prev", use_container_width=True, disabled=pagina_atual == 1):
+        if st.button(
+            "← Anterior",
+            key=f"{state_key}_prev",
+            use_container_width=True,
+            disabled=pagina_atual == 1,
+        ):
             st.session_state[state_key] = pagina_atual - 1
             st.rerun()
     with nav2:
         st.caption(f"Página {pagina_atual} de {total_paginas} • {total} registros")
     with nav3:
-        if st.button("Próxima →", key=f"{state_key}_next", use_container_width=True, disabled=pagina_atual >= total_paginas):
+        if st.button(
+            "Próxima →",
+            key=f"{state_key}_next",
+            use_container_width=True,
+            disabled=pagina_atual >= total_paginas,
+        ):
             st.session_state[state_key] = pagina_atual + 1
             st.rerun()
 
@@ -620,6 +676,7 @@ def formatar_status_texto(status):
         "Concluído": "🔵 Concluído",
     }
     return status_map.get(status, status)
+
 
 def obter_atendentes_ativos():
     return conn.execute(
@@ -763,7 +820,9 @@ def obter_solicitacoes_filtradas(
     params = []
 
     if cliente_id is not None:
-        filtros.append("(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.cliente = %s))")
+        filtros.append(
+            "(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.cliente = %s))"
+        )
         params.extend([cliente_id, cliente_usuario or ""])
     elif empresa_id is not None:
         filtros.append("s.empresa_id = %s")
@@ -963,6 +1022,20 @@ if not st.session_state.logado:
 
     st.stop()
 
+    user = autenticar_usuario(usuario_digitado, senha_digitada)
+
+if user:
+    st.session_state.usuario = user["usuario"]
+    st.session_state.perfil = user["perfil"]
+
+perfil = st.session_state.get("perfil")
+
+if perfil == "admin":
+    menu_options = [...]
+elif perfil == "atendente":
+    menu_options = ["Demandas Solicitadas", "Dashboard"]
+else:
+    menu_options = ["Nova Solicitação", "Demandas Solicitadas"]
 
 
 def aplicar_design_portal():
@@ -1242,6 +1315,7 @@ def render_sidebar_menu(menu_options, current_menu, logo_b64):
                 persistir_query_params()
                 st.rerun()
 
+
 # ----------------------------
 # APP LOGADO
 # ----------------------------
@@ -1265,7 +1339,10 @@ with header_title_col:
         unsafe_allow_html=True,
     )
 
-st.markdown("<hr style='border:1px solid rgba(120,145,170,0.12); margin-top:0;'>", unsafe_allow_html=True)
+st.markdown(
+    "<hr style='border:1px solid rgba(120,145,170,0.12); margin-top:0;'>",
+    unsafe_allow_html=True,
+)
 st.caption("Gestão de demandas e acompanhamento em tempo real")
 
 
@@ -1336,7 +1413,9 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     with col_swap_b:
-        if st.button("Trocar usuário", key="trocar_usuario_menu", use_container_width=True):
+        if st.button(
+            "Trocar usuário", key="trocar_usuario_menu", use_container_width=True
+        ):
             logout()
 
 # ----------------------------
@@ -1369,7 +1448,9 @@ if menu == "Nova Solicitação":
     else:
         cliente_usuario = st.session_state.usuario
         cliente_info = obter_cliente_por_usuario(cliente_usuario)
-        st.text_input("Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True)
+        st.text_input(
+            "Cliente", value=obter_nome_cliente(cliente_usuario), disabled=True
+        )
 
     titulo = st.text_input("Título", key="titulo")
     descricao = st.text_area("Descrição", key="descricao")
@@ -1542,7 +1623,13 @@ elif menu == "Demandas Solicitadas":
     with f1:
         status_filtro = st.selectbox(
             "Filtrar por status",
-            ["Todos", "Em análise", "Em atendimento", "Aguardando cliente", "Concluído"],
+            [
+                "Todos",
+                "Em análise",
+                "Em atendimento",
+                "Aguardando cliente",
+                "Concluído",
+            ],
             index=0,
             key="filtro_status_demandas",
         )
@@ -1560,10 +1647,14 @@ elif menu == "Demandas Solicitadas":
             key="busca_demandas",
         )
 
-    st.caption("Listagem otimizada para reduzir consultas repetidas e melhorar o tempo de resposta.")
+    st.caption(
+        "Listagem otimizada para reduzir consultas repetidas e melhorar o tempo de resposta."
+    )
 
     clientes_mapa = {}
-    atendentes_ativos = obter_atendentes_ativos() if st.session_state.usuario == admin_user else []
+    atendentes_ativos = (
+        obter_atendentes_ativos() if st.session_state.usuario == admin_user else []
+    )
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1582,7 +1673,11 @@ elif menu == "Demandas Solicitadas":
             limite=300,
         )
         grupos_solicitacoes = agrupar_solicitacoes_por_cliente(todas_solicitacoes)
-        clientes_iteracao = [clientes_mapa[chave] for chave in clientes_mapa if chave in grupos_solicitacoes]
+        clientes_iteracao = [
+            clientes_mapa[chave]
+            for chave in clientes_mapa
+            if chave in grupos_solicitacoes
+        ]
     else:
         cliente_logado = obter_cliente_por_usuario(st.session_state.usuario)
         clientes_iteracao = [cliente_logado] if cliente_logado else []
@@ -1642,9 +1737,7 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 anexo_id = int(row["id"])
                 with st.expander(f"Anexos da solicitação #{anexo_id}"):
-                    render_anexos_como_arquivo(
-                        anexo_id, prefixo=f"cliente_{anexo_id}"
-                    )
+                    render_anexos_como_arquivo(anexo_id, prefixo=f"cliente_{anexo_id}")
         else:
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
@@ -1689,7 +1782,8 @@ elif menu == "Demandas Solicitadas":
 
                     if atendentes_ativos:
                         opcoes_atendentes = {
-                            atendente["nome"]: atendente["id"] for atendente in atendentes_ativos
+                            atendente["nome"]: atendente["id"]
+                            for atendente in atendentes_ativos
                         }
                         nomes_atendentes = list(opcoes_atendentes.keys())
                         indice_atendente = 0
@@ -2056,7 +2150,9 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
     labels_empresas = [row["fantasia"] for row in empresas_ativas]
 
     if clientes:
-        clientes, _, _ = paginar_registros(clientes, "pagina_clientes_cadastro", page_size=10)
+        clientes, _, _ = paginar_registros(
+            clientes, "pagina_clientes_cadastro", page_size=10
+        )
         for cli in clientes:
             id_cli = cli["id"]
             with st.container(border=True):
@@ -2076,8 +2172,18 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                 with col4:
                     status_cliente = "Ativo" if bool(cli["ativo"]) else "Inativo"
                     style_status = {
-                        "Ativo": {"bg": "#ECFDF3", "border": "#CDEAD8", "text": "#027A48", "dot": "#12B76A"},
-                        "Inativo": {"bg": "#FEF3F2", "border": "#F3C7C2", "text": "#B42318", "dot": "#F04438"},
+                        "Ativo": {
+                            "bg": "#ECFDF3",
+                            "border": "#CDEAD8",
+                            "text": "#027A48",
+                            "dot": "#12B76A",
+                        },
+                        "Inativo": {
+                            "bg": "#FEF3F2",
+                            "border": "#F3C7C2",
+                            "text": "#B42318",
+                            "dot": "#F04438",
+                        },
                     }
                     s = style_status[status_cliente]
                     st.markdown(
@@ -2101,6 +2207,8 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
                         """,
                         unsafe_allow_html=True,
                     )
+
+                    cnpj = st.text_input("CNPJ", placeholder="00.000.000/0000-00")
 
                 with col5:
                     b1, b2, b3 = st.columns(3)
@@ -2303,11 +2411,17 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
             key="novo_atendente_usuario",
         )
         email_atendente = st.text_input("E-mail", key="novo_atendente_email")
-        senha_atendente = st.text_input("Senha", type="password", key="novo_atendente_senha")
+        senha_atendente = st.text_input(
+            "Senha", type="password", key="novo_atendente_senha"
+        )
         ativo_atendente = st.checkbox("Ativo", value=True, key="novo_atendente_ativo")
 
         if st.button("Cadastrar Atendente"):
-            if not nome_atendente.strip() or not usuario_atendente.strip() or not senha_atendente.strip():
+            if (
+                not nome_atendente.strip()
+                or not usuario_atendente.strip()
+                or not senha_atendente.strip()
+            ):
                 st.error("Preencha nome, usuário e senha.")
             else:
                 existe = conn.execute(
@@ -2342,7 +2456,9 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
     atendentes = obter_todos_atendentes()
 
     if atendentes:
-        atendentes, _, _ = paginar_registros(atendentes, "pagina_atendentes_cadastro", page_size=10)
+        atendentes, _, _ = paginar_registros(
+            atendentes, "pagina_atendentes_cadastro", page_size=10
+        )
         for atendente in atendentes:
             atendente_id = atendente["id"]
             with st.container(border=True):
@@ -2354,7 +2470,9 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
 
                 with col2:
                     st.write(atendente["email"] or "Sem e-mail")
-                    status_atendente = "Ativo" if bool(atendente["ativo"]) else "Inativo"
+                    status_atendente = (
+                        "Ativo" if bool(atendente["ativo"]) else "Inativo"
+                    )
                     cor_dot = "#12B76A" if bool(atendente["ativo"]) else "#F04438"
                     cor_txt = "#027A48" if bool(atendente["ativo"]) else "#B42318"
                     bg_badge = "#ECFDF3" if bool(atendente["ativo"]) else "#FEF3F2"
@@ -2373,14 +2491,22 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                     b1, b2, b3 = st.columns(3)
                     with b1:
                         if bool(atendente["ativo"]):
-                            if st.button("Inativar", key=f"inativar_atendente_{atendente_id}", use_container_width=True):
+                            if st.button(
+                                "Inativar",
+                                key=f"inativar_atendente_{atendente_id}",
+                                use_container_width=True,
+                            ):
                                 conn.execute(
                                     "UPDATE atendentes SET ativo = FALSE WHERE id = %s",
                                     (atendente_id,),
                                 )
                                 st.rerun()
                         else:
-                            if st.button("Ativar", key=f"ativar_atendente_{atendente_id}", use_container_width=True):
+                            if st.button(
+                                "Ativar",
+                                key=f"ativar_atendente_{atendente_id}",
+                                use_container_width=True,
+                            ):
                                 conn.execute(
                                     "UPDATE atendentes SET ativo = TRUE WHERE id = %s",
                                     (atendente_id,),
@@ -2388,14 +2514,20 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 st.rerun()
 
                     with b2:
-                        if st.button("Excluir", key=f"excluir_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Excluir",
+                            key=f"excluir_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             possui_vinculo = conn.execute(
                                 "SELECT 1 FROM solicitacoes WHERE atendente_id = %s LIMIT 1",
                                 (atendente_id,),
                             ).fetchone()
 
                             if possui_vinculo:
-                                st.warning("Este atendente já está vinculado a solicitações. Inative ao invés de excluir.")
+                                st.warning(
+                                    "Este atendente já está vinculado a solicitações. Inative ao invés de excluir."
+                                )
                             else:
                                 conn.execute(
                                     "DELETE FROM atendentes WHERE id = %s",
@@ -2405,7 +2537,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 st.rerun()
 
                     with b3:
-                        if st.button("Alterar", key=f"alterar_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Alterar",
+                            key=f"alterar_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             st.session_state.atendente_editando_id = atendente_id
                             st.rerun()
 
@@ -2438,7 +2574,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
 
                     a1, a2 = st.columns(2)
                     with a1:
-                        if st.button("Salvar alteração", key=f"salvar_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Salvar alteração",
+                            key=f"salvar_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             if not novo_nome_at.strip() or not novo_usuario_at.strip():
                                 st.error("Preencha nome e usuário.")
                             else:
@@ -2448,7 +2588,9 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                 ).fetchone()
 
                                 if usuario_existente:
-                                    st.error("Já existe outro atendente com esse usuário.")
+                                    st.error(
+                                        "Já existe outro atendente com esse usuário."
+                                    )
                                 else:
                                     if nova_senha_at.strip():
                                         conn.execute(
@@ -2485,7 +2627,11 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
                                     st.rerun()
 
                     with a2:
-                        if st.button("Cancelar alteração", key=f"cancelar_atendente_{atendente_id}", use_container_width=True):
+                        if st.button(
+                            "Cancelar alteração",
+                            key=f"cancelar_atendente_{atendente_id}",
+                            use_container_width=True,
+                        ):
                             st.session_state.atendente_editando_id = None
                             st.rerun()
     else:

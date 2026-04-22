@@ -5,6 +5,7 @@ import hmac
 import re
 import secrets
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -37,28 +38,30 @@ def get_connection():
 
 def get_conn():
     """
-    Retorna uma conexão válida.
-    Se a conexão cacheada caiu ou expirou, limpa o cache e reconecta.
+    Retorna a conexão cacheada.
+    A validação ativa é feita apenas em caso de erro, evitando um SELECT 1
+    a cada consulta, que degradava bastante a performance no Streamlit Cloud.
     """
-    try:
-        conn = get_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        return conn
-    except Exception:
-        get_connection.clear()
-        conn = get_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        return conn
+    return get_connection()
+
+
+def reset_connection():
+    get_connection.clear()
+    return get_connection()
 
 
 class SafeConnProxy:
     def execute(self, *args, **kwargs):
-        return get_conn().execute(*args, **kwargs)
+        try:
+            return get_conn().execute(*args, **kwargs)
+        except Exception:
+            return reset_connection().execute(*args, **kwargs)
 
     def cursor(self, *args, **kwargs):
-        return get_conn().cursor(*args, **kwargs)
+        try:
+            return get_conn().cursor(*args, **kwargs)
+        except Exception:
+            return reset_connection().cursor(*args, **kwargs)
 
 
 def run_query(sql, params=None, fetchone=False, fetchall=False):
@@ -566,6 +569,34 @@ def nova_solicitacao():
     st.rerun()
 
 
+def paginar_registros(registros, state_key, page_size=12):
+    total = len(registros or [])
+    if total <= page_size:
+        return registros, 1, 1
+
+    total_paginas = (total + page_size - 1) // page_size
+    pagina_atual = int(st.session_state.get(state_key, 1) or 1)
+    pagina_atual = max(1, min(pagina_atual, total_paginas))
+    st.session_state[state_key] = pagina_atual
+
+    inicio = (pagina_atual - 1) * page_size
+    fim = inicio + page_size
+
+    nav1, nav2, nav3 = st.columns([1, 1.3, 1])
+    with nav1:
+        if st.button("← Anterior", key=f"{state_key}_prev", use_container_width=True, disabled=pagina_atual == 1):
+            st.session_state[state_key] = pagina_atual - 1
+            st.rerun()
+    with nav2:
+        st.caption(f"Página {pagina_atual} de {total_paginas} • {total} registros")
+    with nav3:
+        if st.button("Próxima →", key=f"{state_key}_next", use_container_width=True, disabled=pagina_atual >= total_paginas):
+            st.session_state[state_key] = pagina_atual + 1
+            st.rerun()
+
+    return registros[inicio:fim], pagina_atual, total_paginas
+
+
 def normalizar_status(status):
     mapa = {
         "Pendente": "Em análise",
@@ -804,6 +835,14 @@ def obter_solicitacoes_filtradas(
         item["status"] = normalizar_status(item.get("status"))
         dados.append(item)
     return dados
+
+
+def agrupar_solicitacoes_por_cliente(solicitacoes):
+    grupos = defaultdict(list)
+    for item in solicitacoes:
+        chave = (item.get("cliente_id"), item.get("cliente"))
+        grupos[chave].append(item)
+    return grupos
 
 
 def aplicar_estilo_login():
@@ -1521,7 +1560,10 @@ elif menu == "Demandas Solicitadas":
             key="busca_demandas",
         )
 
-    st.caption("Exibindo no máximo 50 registros por cliente para preservar performance.")
+    st.caption("Listagem otimizada para reduzir consultas repetidas e melhorar o tempo de resposta.")
+
+    clientes_mapa = {}
+    atendentes_ativos = obter_atendentes_ativos() if st.session_state.usuario == admin_user else []
 
     if st.session_state.usuario == admin_user:
         clientes = conn.execute(
@@ -1532,25 +1574,44 @@ elif menu == "Demandas Solicitadas":
             ORDER BY nome, usuario
             """
         ).fetchall()
-    else:
-        cliente_logado = obter_cliente_por_usuario(st.session_state.usuario)
-        clientes = [cliente_logado] if cliente_logado else []
-
-    encontrou_resultado = False
-
-    for cli in clientes:
-        if not cli:
-            continue
-
-        dados_cli = obter_solicitacoes_filtradas(
-            cliente_id=cli["id"],
-            cliente_usuario=cli["usuario"],
-            empresa_id=None,
+        clientes_mapa = {(cli["id"], cli["usuario"]): cli for cli in clientes if cli}
+        todas_solicitacoes = obter_solicitacoes_filtradas(
             status_filtro=status_filtro,
             prioridade_filtro=prioridade_filtro,
             busca=busca_filtro,
-            limite=50,
+            limite=300,
         )
+        grupos_solicitacoes = agrupar_solicitacoes_por_cliente(todas_solicitacoes)
+        clientes_iteracao = [clientes_mapa[chave] for chave in clientes_mapa if chave in grupos_solicitacoes]
+    else:
+        cliente_logado = obter_cliente_por_usuario(st.session_state.usuario)
+        clientes_iteracao = [cliente_logado] if cliente_logado else []
+        grupos_solicitacoes = {}
+
+    encontrou_resultado = False
+
+    clientes_iteracao, _, _ = paginar_registros(
+        clientes_iteracao,
+        state_key="pagina_demandas_clientes",
+        page_size=8 if st.session_state.usuario == admin_user else 1,
+    )
+
+    for cli in clientes_iteracao:
+        if not cli:
+            continue
+
+        if st.session_state.usuario == admin_user:
+            dados_cli = grupos_solicitacoes.get((cli["id"], cli["usuario"]), [])
+        else:
+            dados_cli = obter_solicitacoes_filtradas(
+                cliente_id=cli["id"],
+                cliente_usuario=cli["usuario"],
+                empresa_id=None,
+                status_filtro=status_filtro,
+                prioridade_filtro=prioridade_filtro,
+                busca=busca_filtro,
+                limite=50,
+            )
 
         if not dados_cli:
             continue
@@ -1623,7 +1684,6 @@ elif menu == "Demandas Solicitadas":
                         placeholder="Digite aqui a observação para o cliente...",
                     )
 
-                    atendentes_ativos = obter_atendentes_ativos()
                     nome_atendente_atual = row.get("atendente_nome") or "Não atribuído"
                     st.caption(f"Atendente atual: {nome_atendente_atual}")
 
@@ -1996,6 +2056,7 @@ elif menu == "Cadastro de Clientes" and st.session_state.usuario == admin_user:
     labels_empresas = [row["fantasia"] for row in empresas_ativas]
 
     if clientes:
+        clientes, _, _ = paginar_registros(clientes, "pagina_clientes_cadastro", page_size=10)
         for cli in clientes:
             id_cli = cli["id"]
             with st.container(border=True):
@@ -2281,6 +2342,7 @@ elif menu == "Cadastro de Atendentes" and st.session_state.usuario == admin_user
     atendentes = obter_todos_atendentes()
 
     if atendentes:
+        atendentes, _, _ = paginar_registros(atendentes, "pagina_atendentes_cadastro", page_size=10)
         for atendente in atendentes:
             atendente_id = atendente["id"]
             with st.container(border=True):
