@@ -791,11 +791,11 @@ def normalizar_status(status):
     mapa = {
         "Pendente": "Em análise",
         "Iniciado": "Em atendimento",
-        "Pausado": "Aguardando cliente",
+        "Pausado": "Aguardando",
         "Resolvido": "Concluído",
         "Em análise": "Em análise",
         "Em atendimento": "Em atendimento",
-        "Aguardando cliente": "Aguardando cliente",
+        "Aguardando": "Aguardando",
         "Concluído": "Concluído",
     }
     return mapa.get(status, status)
@@ -806,7 +806,7 @@ def formatar_status_texto(status):
     status_map = {
         "Em análise": "🔴 Em análise",
         "Em atendimento": "🟢 Em atendimento",
-        "Aguardando cliente": "🟡 Aguardando cliente",
+        "Aguardando": "🟡 Aguardando",
         "Concluído": "🔵 Concluído",
     }
     return status_map.get(status, status)
@@ -970,7 +970,7 @@ def obter_solicitacoes_filtradas(
             CASE
                 WHEN s.status = 'Pendente' THEN 'Em análise'
                 WHEN s.status = 'Iniciado' THEN 'Em atendimento'
-                WHEN s.status = 'Pausado' THEN 'Aguardando cliente'
+                WHEN s.status = 'Pausado' THEN 'Aguardando'
                 WHEN s.status = 'Resolvido' THEN 'Concluído'
                 ELSE s.status
             END = %s
@@ -1690,6 +1690,70 @@ def svg_menu_icon(kind):
     return icons.get(kind, icons["demandas"])
 
 
+def sla_limite(prioridade):
+    prioridade = (prioridade or "").strip()
+    if prioridade == "Alta":
+        return 24
+    if prioridade == "Média":
+        return 48
+    return 72
+
+
+def registrar_historico_solicitacao(solicitacao_id, status, observacao):
+    conn.execute(
+        """
+        INSERT INTO solicitacoes_historico
+        (solicitacao_id, status, observacao, usuario, data_registro)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (
+            solicitacao_id,
+            status,
+            (observacao or "").strip(),
+            st.session_state.usuario,
+            agora(),
+        ),
+    )
+
+
+def obter_historico_solicitacao(solicitacao_id):
+    return conn.execute(
+        """
+        SELECT id, status, observacao, usuario, data_registro
+        FROM solicitacoes_historico
+        WHERE solicitacao_id = %s
+        ORDER BY data_registro ASC, id ASC
+        """,
+        (solicitacao_id,),
+    ).fetchall()
+
+
+def render_historico_solicitacao(solicitacao_id):
+    historico = obter_historico_solicitacao(solicitacao_id)
+
+    if not historico:
+        st.info("Nenhum registro de acompanhamento ainda.")
+        return
+
+    st.markdown("**Histórico de acompanhamento:**")
+
+    for item in historico:
+        data_txt = (
+            item["data_registro"].strftime("%d/%m/%Y %H:%M")
+            if item.get("data_registro")
+            else "-"
+        )
+
+        with st.container(border=True):
+            c1, c2 = st.columns([1.2, 4])
+            with c1:
+                st.write(f"**{data_txt}**")
+                st.caption(item.get("usuario") or "-")
+            with c2:
+                st.write(f"**{item.get('status') or '-'}**")
+                st.write(item.get("observacao") or "-")
+
+
 def render_sidebar_menu(menu_options, current_menu, logo_b64):
     icon_map = {
         "Dashboard": "dashboard",
@@ -1942,7 +2006,7 @@ if menu == "Nova Solicitação":
                     WHERE cliente_id = %s
                       AND titulo = %s
                       AND descricao = %s
-                      AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando cliente')
+                      AND status IN ('Pendente', 'Iniciado', 'Pausado', 'Em análise', 'Em atendimento', 'Aguardando')
                     LIMIT 1
                     """,
                     (cliente_id, titulo_limpo, descricao_limpa),
@@ -2030,9 +2094,7 @@ elif menu == "Demandas Solicitadas":
             )
 
     if st.session_state.get("mostrar_legenda", False):
-        st.info(
-            "🔴 Em análise\n\n🟢 Em atendimento\n\n🟡 Aguardando cliente\n\n🔵 Concluído"
-        )
+        st.info("🔴 Em análise\n\n🟢 Em atendimento\n\n🟡 Aguardando\n\n🔵 Concluído")
 
     f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
     with f1:
@@ -2042,7 +2104,7 @@ elif menu == "Demandas Solicitadas":
                 "Todos",
                 "Em análise",
                 "Em atendimento",
-                "Aguardando cliente",
+                "Aguardando",
                 "Concluído",
             ],
             index=0,
@@ -2183,6 +2245,8 @@ elif menu == "Demandas Solicitadas":
                         prefixo=f"admin_{solicitacao_id}",
                     )
 
+                    render_historico_solicitacao(solicitacao_id)
+
                     obs_key = f"obs_{solicitacao_id}"
                     if obs_key not in st.session_state:
                         st.session_state[obs_key] = (
@@ -2264,6 +2328,7 @@ elif menu == "Demandas Solicitadas":
                                 st.rerun()
 
                     elif status_atual == "Em atendimento":
+
                         with ac1:
                             if st.button(
                                 "AGUARDAR CLIENTE",
@@ -2272,10 +2337,18 @@ elif menu == "Demandas Solicitadas":
                             ):
                                 atualizar_solicitacao(
                                     solicitacao_id,
+                                    "Aguardando",
+                                    st.session_state[obs_key],
+                                )
+
+                                registrar_historico_solicitacao(
+                                    solicitacao_id,
                                     "Aguardando cliente",
                                     st.session_state[obs_key],
                                 )
+
                                 st.rerun()
+
                         with ac2:
                             if st.button(
                                 "FINALIZAR",
@@ -2287,9 +2360,17 @@ elif menu == "Demandas Solicitadas":
                                     "Concluído",
                                     st.session_state[obs_key],
                                 )
+
+                                registrar_historico_solicitacao(
+                                    solicitacao_id,
+                                    "Concluído",
+                                    st.session_state[obs_key],
+                                )
+
                                 st.rerun()
 
-                    elif status_atual == "Aguardando cliente":
+                    elif status_atual == "Aguardando":
+
                         with ac1:
                             if st.button(
                                 "RETOMAR",
@@ -2301,11 +2382,19 @@ elif menu == "Demandas Solicitadas":
                                     "Em atendimento",
                                     st.session_state[obs_key],
                                 )
+
+                                registrar_historico_solicitacao(
+                                    solicitacao_id,
+                                    "Em atendimento",
+                                    st.session_state[obs_key],
+                                )
+
                                 st.rerun()
+
                         with ac2:
                             if st.button(
                                 "FINALIZAR",
-                                key=f"finalizar_aguardando_{solicitacao_id}",
+                                key=f"finalizar_pausado_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
@@ -2313,6 +2402,13 @@ elif menu == "Demandas Solicitadas":
                                     "Concluído",
                                     st.session_state[obs_key],
                                 )
+
+                                registrar_historico_solicitacao(
+                                    solicitacao_id,
+                                    "Concluído",
+                                    st.session_state[obs_key],
+                                )
+
                                 st.rerun()
                     else:
                         st.success("Demanda concluída.")
@@ -2531,7 +2627,7 @@ elif menu == "Demandas Solicitadas":
                                 ):
                                     atualizar_solicitacao(
                                         solicitacao_id,
-                                        "Aguardando cliente",
+                                        "Aguardando",
                                         st.session_state[obs_key],
                                     )
                                     st.rerun()
@@ -2548,7 +2644,7 @@ elif menu == "Demandas Solicitadas":
                                     )
                                     st.rerun()
 
-                        elif status_atual == "Aguardando cliente":
+                        elif status_atual == "Aguardando":
                             with ac1:
                                 if st.button(
                                     "RETOMAR",
@@ -2847,66 +2943,235 @@ elif menu == "Solicitação de Projeto":
                                 st.rerun()
 
 elif menu == "Dashboard" and perfil_atual == "admin":
-    st.header("Dashboard")
+    st.markdown("### Dashboard Executivo")
+    st.caption(
+        "Visão operacional para medir produtividade, identificar atrasos, acompanhar SLA e priorizar atendimentos."
+    )
+
+    def sla_limite(prioridade):
+        prioridade = (prioridade or "").strip()
+        if prioridade == "Alta":
+            return 24
+        if prioridade == "Média":
+            return 48
+        return 72
 
     dados = conn.execute(
         """
-        SELECT id, cliente, titulo, descricao, prioridade, status, complexidade, resposta, data_criacao, inicio_atendimento, fim_atendimento
-        FROM solicitacoes
+        SELECT
+            s.id,
+            s.cliente,
+            c.nome AS cliente_nome,
+            e.fantasia AS empresa_nome,
+            s.titulo,
+            s.descricao,
+            s.prioridade,
+            s.status,
+            s.complexidade,
+            s.resposta,
+            s.data_criacao,
+            s.inicio_atendimento,
+            s.fim_atendimento,
+            a.nome AS atendente_nome
+        FROM solicitacoes s
+        LEFT JOIN clientes c ON c.id = s.cliente_id
+        LEFT JOIN empresas e ON e.id = s.empresa_id
+        LEFT JOIN atendentes a ON a.id = s.atendente_id
+        ORDER BY s.data_criacao DESC NULLS LAST, s.id DESC
         """
     ).fetchall()
 
-    colunas = [
-        "ID",
-        "Cliente",
-        "Título",
-        "Descrição",
-        "Prioridade",
-        "Status",
-        "Complexidade",
-        "Resposta",
-        "Data",
-        "Início",
-        "Fim",
-    ]
-    df = (
-        pd.DataFrame([tuple(r.values()) for r in dados], columns=colunas)
-        if dados
-        else pd.DataFrame(columns=colunas)
-    )
+    if not dados:
+        st.info("Nenhuma solicitação registrada ainda.")
+        st.stop()
 
-    if not df.empty:
-        df["Status"] = df["Status"].apply(normalizar_status)
+    df = pd.DataFrame(dados)
+
+    df["status_norm"] = df["status"].apply(normalizar_status)
+    df["data_criacao"] = pd.to_datetime(df["data_criacao"], errors="coerce")
+    df["inicio_atendimento"] = pd.to_datetime(df["inicio_atendimento"], errors="coerce")
+    df["fim_atendimento"] = pd.to_datetime(df["fim_atendimento"], errors="coerce")
+
+    agora_ref = pd.Timestamp(agora()).tz_localize(None)
+
+    df["horas_aberta"] = (
+        (agora_ref - df["data_criacao"]).dt.total_seconds() / 3600
+    ).fillna(0)
+
+    df["sla_limite"] = df["prioridade"].apply(sla_limite)
+
+    df_ativas = df[df["status_norm"] != "Concluído"].copy()
+    df_concluidas = df[df["status_norm"] == "Concluído"].copy()
+
+    if not df_concluidas.empty:
+        df_concluidas["tempo_horas"] = (
+            df_concluidas["fim_atendimento"] - df_concluidas["data_criacao"]
+        ).dt.total_seconds() / 3600
+
+        tempo_medio = df_concluidas["tempo_horas"].mean()
+        total_concluidas = len(df_concluidas)
+
+        df_concluidas["dentro_sla"] = (
+            df_concluidas["tempo_horas"] <= df_concluidas["sla_limite"]
+        )
+
+        sla_percentual = df_concluidas["dentro_sla"].mean() * 100
+    else:
+        tempo_medio = 0
+        total_concluidas = 0
+        sla_percentual = 0
+
+    if not df_ativas.empty:
+        df_ativas["tempo_horas"] = df_ativas["horas_aberta"]
+        df_ativas["atrasada"] = df_ativas["tempo_horas"] > df_ativas["sla_limite"]
+        total_atrasadas = int(df_ativas["atrasada"].sum())
+        criticas_24h = len(df_ativas[df_ativas["horas_aberta"] >= 24])
+        criticas_48h = len(df_ativas[df_ativas["horas_aberta"] >= 48])
+        sem_atendente = len(df_ativas[df_ativas["atendente_nome"].isna()])
+    else:
+        total_atrasadas = 0
+        criticas_24h = 0
+        criticas_48h = 0
+        sem_atendente = 0
 
     total = len(df)
-    finalizadas = len(df[df["Status"].apply(normalizar_status) == "Concluído"])
-    pendentes_iniciadas = len(
-        df[
-            df["Status"].isin(
-                [
-                    "Em análise",
-                    "Iniciado",
-                    "Pausado",
-                    "Em atendimento",
-                    "Aguardando cliente",
-                ]
-            )
-        ]
-    )
+    ativas = len(df_ativas)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total de Solicitações", total)
-    col2.metric("Finalizadas", finalizadas)
-    col3.metric("Pendentes/Iniciadas", pendentes_iniciadas)
+    st.markdown("#### Produtividade")
+    c1, c2, c3, c4 = st.columns(4)
 
-    st.subheader("Solicitações por Prioridade")
-    if not df.empty:
-        resumo = df.groupby("Prioridade")["ID"].count().reset_index()
-        resumo.columns = ["Prioridade", "Quantidade"]
-        st.bar_chart(resumo.set_index("Prioridade"))
+    c1.metric("Concluídas", total_concluidas)
+    c2.metric("Tempo médio (h)", f"{tempo_medio:.1f}")
+    c3.metric("SLA cumprido", f"{sla_percentual:.0f}%")
+    c4.metric("Atrasadas", total_atrasadas)
+
+    st.markdown("#### Operação atual")
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+    col1.metric("Total", total)
+    col2.metric("Ativas", ativas)
+    col3.metric("+24h", criticas_24h)
+    col4.metric("+48h", criticas_48h)
+    col5.metric("Sem atendente", sem_atendente)
+    col6.metric("Finalizadas", total_concluidas)
+
+    st.markdown("---")
+
+    st.markdown("#### Fila crítica")
+    st.caption("Demandas abertas com maior risco operacional.")
+
+    fila = df_ativas.sort_values(
+        by=["horas_aberta", "prioridade"],
+        ascending=[False, True],
+    ).head(10)
+
+    if fila.empty:
+        st.success("Nenhuma demanda ativa no momento.")
     else:
-        st.info("Nenhuma solicitação registrada ainda.")
+        for _, row in fila.iterrows():
+            horas = float(row["horas_aberta"])
 
+            if horas >= 48:
+                alerta = "🔴"
+                fundo = "rgba(160,40,40,0.22)"
+                borda = "rgba(255,90,90,0.50)"
+            elif horas >= 24:
+                alerta = "🟡"
+                fundo = "rgba(170,130,25,0.22)"
+                borda = "rgba(255,200,80,0.50)"
+            else:
+                alerta = "🟢"
+                fundo = "rgba(255,255,255,0.025)"
+                borda = "rgba(120,145,170,0.20)"
+
+            st.markdown(
+                f"""
+                <div style="
+                    border:1px solid {borda};
+                    border-radius:14px;
+                    padding:12px 14px;
+                    margin-bottom:8px;
+                    background:{fundo};
+                ">
+                    <b>{alerta} #{int(row['id'])} • {html.escape(str(row['titulo']))}</b><br>
+                    Cliente: {html.escape(str(row.get('cliente_nome') or row.get('cliente') or '-'))}
+                    • Prioridade: <b>{html.escape(str(row.get('prioridade') or '-'))}</b>
+                    • Status: <b>{formatar_status_texto(row['status_norm'])}</b>
+                    • Aberta há: <b>{horas:.1f}h</b>
+                    • Atendente: <b>{html.escape(str(row.get('atendente_nome') or 'Não atribuído'))}</b>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+
+    g1, g2 = st.columns(2)
+
+    with g1:
+        st.markdown("#### Solicitações por status")
+        status_df = df.groupby("status_norm")["id"].count().reset_index()
+        status_df.columns = ["Status", "Quantidade"]
+        st.bar_chart(status_df.set_index("Status"))
+
+    with g2:
+        st.markdown("#### Solicitações por prioridade")
+        prioridade_df = df.groupby("prioridade")["id"].count().reset_index()
+        prioridade_df.columns = ["Prioridade", "Quantidade"]
+        st.bar_chart(prioridade_df.set_index("Prioridade"))
+
+    t1, t2 = st.columns(2)
+
+    with t1:
+        st.markdown("#### Demandas ativas por atendente")
+        atendente_df = df_ativas.copy()
+        if atendente_df.empty:
+            st.info("Nenhuma demanda ativa.")
+        else:
+            atendente_df["atendente_nome"] = atendente_df["atendente_nome"].fillna(
+                "Não atribuído"
+            )
+            atendente_df = (
+                atendente_df.groupby("atendente_nome")["id"]
+                .count()
+                .reset_index()
+                .sort_values("id", ascending=False)
+            )
+            atendente_df.columns = ["Atendente", "Demandas ativas"]
+            st.dataframe(atendente_df, use_container_width=True, hide_index=True)
+
+    with t2:
+        st.markdown("#### Clientes com mais demandas ativas")
+        clientes_df = df_ativas.copy()
+        if clientes_df.empty:
+            st.info("Nenhuma demanda ativa.")
+        else:
+            clientes_df["cliente_exibicao"] = clientes_df["cliente_nome"].fillna(
+                clientes_df["cliente"]
+            )
+            clientes_df = (
+                clientes_df.groupby("cliente_exibicao")["id"]
+                .count()
+                .reset_index()
+                .sort_values("id", ascending=False)
+                .head(10)
+            )
+            clientes_df.columns = ["Cliente", "Demandas ativas"]
+            st.dataframe(clientes_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    st.markdown("#### Resumo executivo")
+    if total_atrasadas > 0:
+        st.warning(
+            f"Existem {total_atrasadas} demandas fora do SLA. Priorize a fila crítica antes de iniciar novas demandas."
+        )
+    elif ativas > 0:
+        st.info(
+            "Não há demandas vencidas no momento. Mantenha foco nas demandas com maior tempo em aberto."
+        )
+    else:
+        st.success("Não há fila ativa no momento.")
 
 elif menu == "Cadastro de Clientes" and perfil_atual == "admin":
     st.header("Cadastro de Clientes")
