@@ -2380,27 +2380,65 @@ elif menu == "Demandas Solicitadas":
                     status_atual = normalizar_status(row["status"])
                     solicitacao_id = int(row["id"])
 
-                    with st.container(border=True):
-                        c1, c2, c3, c4, c5 = st.columns([0.7, 2.5, 1.2, 1.4, 1.5])
-                        with c1:
-                            st.write(f"**#{solicitacao_id}**")
-                        with c2:
-                            st.write(f"**{row['titulo']}**")
-                            st.caption(row["descricao"])
-                        with c3:
-                            st.write(f"Prioridade: **{row['prioridade']}**")
-                        with c4:
-                            st.write(
-                                f"Status: **{formatar_status_texto(status_atual)}**"
-                            )
-                        with c5:
-                            if row["complexidade"]:
-                                st.write(f"Complexidade: **{row['complexidade']}**")
+                    data_criacao = row.get("data_criacao")
+                    horas_aberta = 0
 
-                        with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
-                            render_anexos_como_arquivo(
-                                solicitacao_id, prefixo=f"admin_{solicitacao_id}"
+                    if data_criacao:
+                        try:
+                            if data_criacao.tzinfo is None:
+                                data_base = data_criacao.replace(tzinfo=APP_TZ)
+                            else:
+                                data_base = data_criacao
+                            horas_aberta = (agora() - data_base).total_seconds() / 3600
+                        except Exception:
+                            horas_aberta = 0
+
+                    cor_fundo = "rgba(255,255,255,0.02)"
+                    borda = "rgba(120,145,170,0.18)"
+
+                    if status_atual != "Concluído":
+                        if horas_aberta >= 48:
+                            cor_fundo = "rgba(160, 40, 40, 0.28)"
+                            borda = "rgba(255, 90, 90, 0.55)"
+                        elif horas_aberta >= 24:
+                            cor_fundo = "rgba(170, 130, 25, 0.28)"
+                            borda = "rgba(255, 200, 80, 0.55)"
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background:{cor_fundo};
+                            border:1px solid {borda};
+                            border-radius:14px;
+                            padding:14px 16px;
+                            margin-bottom:10px;
+                        ">
+                            <div style="display:grid; grid-template-columns: 80px 1fr 160px 180px; gap:12px; align-items:center;">
+                                <div><b>#{solicitacao_id}</b></div>
+                                <div><b>{html.escape(str(row['titulo']))}</b></div>
+                                <div>Prioridade: <b>{html.escape(str(row['prioridade']))}</b></div>
+                                <div>Status: <b>{formatar_status_texto(status_atual)}</b></div>
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    with st.expander(
+                        f"Ver detalhes da solicitação #{solicitacao_id}", expanded=False
+                    ):
+                        st.write("**Descrição:**")
+                        st.write(row["descricao"] or "-")
+
+                        if data_criacao:
+                            st.caption(
+                                f"Aberta em: {data_criacao.strftime('%d/%m/%Y %H:%M')} • {horas_aberta:.1f}h em aberto"
                             )
+
+                        render_anexos_como_arquivo(
+                            solicitacao_id,
+                            prefixo=f"admin_{solicitacao_id}",
+                        )
 
                         obs_key = f"obs_{solicitacao_id}"
                         if obs_key not in st.session_state:
@@ -2426,6 +2464,7 @@ elif menu == "Demandas Solicitadas":
                                 for atendente in atendentes_ativos
                             }
                             nomes_atendentes = list(opcoes_atendentes.keys())
+
                             indice_atendente = 0
                             if row.get("atendente_id"):
                                 for idx_at, atendente in enumerate(atendentes_ativos):
@@ -2467,7 +2506,7 @@ elif menu == "Demandas Solicitadas":
                         else:
                             st.info("Nenhum atendente ativo cadastrado.")
 
-                        ac1, ac2, ac3, ac4 = st.columns([1.2, 1.2, 1, 3.6])
+                        ac1, ac2, ac3 = st.columns([1.2, 1.2, 3])
 
                         if status_atual == "Em análise":
                             with ac1:
@@ -2482,6 +2521,7 @@ elif menu == "Demandas Solicitadas":
                                         st.session_state[obs_key],
                                     )
                                     st.rerun()
+
                         elif status_atual == "Em atendimento":
                             with ac1:
                                 if st.button(
@@ -2507,6 +2547,7 @@ elif menu == "Demandas Solicitadas":
                                         st.session_state[obs_key],
                                     )
                                     st.rerun()
+
                         elif status_atual == "Aguardando cliente":
                             with ac1:
                                 if st.button(
