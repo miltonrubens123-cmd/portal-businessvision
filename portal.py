@@ -191,6 +191,25 @@ def verificar_senha(senha_informada, senha_armazenada):
     return hmac.compare_digest(senha_armazenada, senha_informada or "")
 
 
+def autenticar_usuario(usuario, senha):
+    user = conn.execute(
+        """
+        SELECT *
+        FROM usuarios
+        WHERE usuario = %s AND ativo = TRUE
+    """,
+        (usuario,),
+    ).fetchone()
+
+    if not user:
+        return None
+
+    if not verificar_senha(senha, user["senha_hash"]):
+        return None
+
+    return user
+
+
 def autenticar_admin(usuario_digitado, senha_digitada):
     config = obter_admin_config()
     admin_user = config["user"]
@@ -1534,6 +1553,14 @@ if not st.session_state.logado:
                     else:
                         st.error("Usuário ou senha inválidos.")
     st.stop()
+
+    user = autenticar_usuario(usuario_digitado, senha_digitada)
+
+if user:
+    st.session_state.logado = True
+    st.session_state.usuario = user["usuario"]
+    st.session_state.perfil = user["perfil"]
+
 # DEBUG TEMPORÁRIO
 st.write("Usuário:", st.session_state.usuario)
 st.write("Perfil:", st.session_state.perfil)
