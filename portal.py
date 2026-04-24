@@ -1432,10 +1432,15 @@ def aplicar_design_portal():
             position: relative !important;
             transition: all 0.3s ease-in-out !important;
         }
-
         [data-testid="collapsedControl"] {
-            position: relative !important;
-            z-index: 1000 !important;
+            position: fixed !important;
+            top: 18px !important;
+            left: 18px !important;
+            z-index: 999999 !important;
+            transition: all 0.25s ease-in-out !important;
+        }
+        [data-testid="collapsedControl"] {
+            display: none !important;
         }
         section[data-testid="stSidebar"] > div {
             width: 100% !important;
