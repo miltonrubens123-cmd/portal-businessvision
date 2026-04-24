@@ -1353,6 +1353,10 @@ def aplicar_estilo_login():
     )
 
 
+def autenticar_admin(usuario_digitado, senha_digitada):
+    config = obter_admin_config()
+
+
 def render_tela_convite(token_convite):
     aplicar_estilo_login()
     convite = obter_convite_por_token(token_convite)
@@ -1530,6 +1534,9 @@ if not st.session_state.logado:
                     else:
                         st.error("Usuário ou senha inválidos.")
     st.stop()
+# DEBUG TEMPORÁRIO
+st.write("Usuário:", st.session_state.usuario)
+st.write("Perfil:", st.session_state.perfil)
 
 
 def aplicar_design_portal():
