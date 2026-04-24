@@ -635,7 +635,12 @@ def restaurar_login():
     perfil = sessao.get("perfil") or ""
 
     if perfil == "admin":
-        if usuario != admin_user:
+        usuario_admin = conn.execute(
+            "SELECT usuario FROM usuarios WHERE usuario = %s AND perfil = 'admin' AND ativo = TRUE",
+            (usuario,),
+        ).fetchone()
+
+        if not usuario_admin and usuario != admin_user:
             return
     elif perfil == "cliente":
         cliente = conn.execute(
@@ -1372,10 +1377,6 @@ def aplicar_estilo_login():
     )
 
 
-def autenticar_admin(usuario_digitado, senha_digitada):
-    config = obter_admin_config()
-
-
 def render_tela_convite(token_convite):
     aplicar_estilo_login()
     convite = obter_convite_por_token(token_convite)
@@ -1513,69 +1514,66 @@ if not st.session_state.logado:
 
             if not usuario_digitado or not senha_digitada:
                 st.error("Informe usuário e senha.")
-            elif autenticar_admin(usuario_digitado, senha_digitada):
-                token = criar_sessao_login(usuario_digitado, "Nova Solicitação")
-                st.session_state.logado = True
-                st.session_state.usuario = usuario_digitado
-                st.session_state.perfil = "admin"
-                st.session_state.menu_atual = "Nova Solicitação"
-                st.session_state.token_sessao = token
-                persistir_query_params()
-                st.rerun()
+
             else:
-                cliente = autenticar_cliente(usuario_digitado, senha_digitada)
-                if cliente:
-                    st.session_state.logado = True
-                    st.session_state.usuario = cliente["usuario"]
+                user = autenticar_usuario(usuario_digitado, senha_digitada)
 
-                    perfil_banco = conn.execute(
-                        "SELECT perfil FROM usuarios WHERE usuario = %s LIMIT 1",
-                        (usuario_digitado,),
-                    ).fetchone()
+                if user:
+                    perfil_usuario = user["perfil"] or "cliente"
+                    menu_inicial = "Demandas Solicitadas" if perfil_usuario == "atendente" else "Nova Solicitação"
 
-                    perfil_usuario = (
-                        perfil_banco["perfil"] if perfil_banco else "cliente"
-                    )
+                    token = criar_sessao_login(usuario_digitado, perfil_usuario, menu_inicial)
 
-                    st.session_state.perfil = perfil_usuario
-
-                    token = criar_sessao_login(
-                        usuario_digitado, perfil_usuario, "Nova Solicitação"
-                    )
-                    st.session_state.perfil = perfil_usuario
                     st.session_state.logado = True
                     st.session_state.usuario = usuario_digitado
-                    perfil_banco = conn.execute(
-                        "SELECT perfil FROM usuarios WHERE usuario = %s LIMIT 1",
-                        (usuario_digitado,),
-                    ).fetchone()
-
-                    perfil_usuario = (
-                        perfil_banco["perfil"]
-                        if perfil_banco and perfil_banco["perfil"]
-                        else "cliente"
-                    )
-
                     st.session_state.perfil = perfil_usuario
-                    st.session_state.menu_atual = "Nova Solicitação"
+                    st.session_state.menu_atual = menu_inicial
                     st.session_state.token_sessao = token
+
                     persistir_query_params()
                     st.rerun()
+
+                elif autenticar_admin(usuario_digitado, senha_digitada):
+                    token = criar_sessao_login(usuario_digitado, "admin", "Nova Solicitação")
+
+                    st.session_state.logado = True
+                    st.session_state.usuario = usuario_digitado
+                    st.session_state.perfil = "admin"
+                    st.session_state.menu_atual = "Nova Solicitação"
+                    st.session_state.token_sessao = token
+
+                    persistir_query_params()
+                    st.rerun()
+
                 else:
-                    atendente = autenticar_atendente(usuario_digitado, senha_digitada)
-                    if atendente:
-                        token = criar_sessao_login(
-                            usuario_digitado, "atendente", "Demandas Solicitadas"
-                        )
+                    cliente = autenticar_cliente(usuario_digitado, senha_digitada)
+                    if cliente:
+                        token = criar_sessao_login(usuario_digitado, "cliente", "Nova Solicitação")
+
                         st.session_state.logado = True
                         st.session_state.usuario = usuario_digitado
-                        st.session_state.perfil = "atendente"
-                        st.session_state.menu_atual = "Demandas Solicitadas"
+                        st.session_state.perfil = "cliente"
+                        st.session_state.menu_atual = "Nova Solicitação"
                         st.session_state.token_sessao = token
+
                         persistir_query_params()
                         st.rerun()
+
                     else:
-                        st.error("Usuário ou senha inválidos.")
+                        atendente = autenticar_atendente(usuario_digitado, senha_digitada)
+                        if atendente:
+                            token = criar_sessao_login(usuario_digitado, "atendente", "Demandas Solicitadas")
+
+                            st.session_state.logado = True
+                            st.session_state.usuario = usuario_digitado
+                            st.session_state.perfil = "atendente"
+                            st.session_state.menu_atual = "Demandas Solicitadas"
+                            st.session_state.token_sessao = token
+
+                            persistir_query_params()
+                            st.rerun()
+                        else:
+                            st.error("Usuário ou senha inválidos.")
     st.stop()
 # DEBUG TEMPORÁRIO
 st.write("Usuário:", st.session_state.usuario)
