@@ -1520,9 +1520,15 @@ if not st.session_state.logado:
 
                 if user:
                     perfil_usuario = user["perfil"] or "cliente"
-                    menu_inicial = "Demandas Solicitadas" if perfil_usuario == "atendente" else "Nova Solicitação"
+                    menu_inicial = (
+                        "Demandas Solicitadas"
+                        if perfil_usuario == "atendente"
+                        else "Nova Solicitação"
+                    )
 
-                    token = criar_sessao_login(usuario_digitado, perfil_usuario, menu_inicial)
+                    token = criar_sessao_login(
+                        usuario_digitado, perfil_usuario, menu_inicial
+                    )
 
                     st.session_state.logado = True
                     st.session_state.usuario = usuario_digitado
@@ -1534,7 +1540,9 @@ if not st.session_state.logado:
                     st.rerun()
 
                 elif autenticar_admin(usuario_digitado, senha_digitada):
-                    token = criar_sessao_login(usuario_digitado, "admin", "Nova Solicitação")
+                    token = criar_sessao_login(
+                        usuario_digitado, "admin", "Nova Solicitação"
+                    )
 
                     st.session_state.logado = True
                     st.session_state.usuario = usuario_digitado
@@ -1548,7 +1556,9 @@ if not st.session_state.logado:
                 else:
                     cliente = autenticar_cliente(usuario_digitado, senha_digitada)
                     if cliente:
-                        token = criar_sessao_login(usuario_digitado, "cliente", "Nova Solicitação")
+                        token = criar_sessao_login(
+                            usuario_digitado, "cliente", "Nova Solicitação"
+                        )
 
                         st.session_state.logado = True
                         st.session_state.usuario = usuario_digitado
@@ -1560,9 +1570,13 @@ if not st.session_state.logado:
                         st.rerun()
 
                     else:
-                        atendente = autenticar_atendente(usuario_digitado, senha_digitada)
+                        atendente = autenticar_atendente(
+                            usuario_digitado, senha_digitada
+                        )
                         if atendente:
-                            token = criar_sessao_login(usuario_digitado, "atendente", "Demandas Solicitadas")
+                            token = criar_sessao_login(
+                                usuario_digitado, "atendente", "Demandas Solicitadas"
+                            )
 
                             st.session_state.logado = True
                             st.session_state.usuario = usuario_digitado
@@ -2108,24 +2122,68 @@ elif menu == "Demandas Solicitadas":
             for _, row in df_cli.iterrows():
                 status_atual = normalizar_status(row["status"])
                 solicitacao_id = int(row["id"])
-                with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([0.8, 3.2, 1.3, 1.7])
-                    with c1:
-                        st.write(f"**#{solicitacao_id}**")
-                    with c2:
-                        st.write(f"**{row['titulo']}**")
-                        st.caption(row["descricao"])
-                    with c3:
-                        st.write(f"Prioridade: **{row['prioridade']}**")
-                    with c4:
-                        st.write(f"Status: **{formatar_status_texto(status_atual)}**")
 
-                    with st.expander(f"Anexos da solicitação #{solicitacao_id}"):
-                        render_anexos_como_arquivo(
-                            solicitacao_id, prefixo=f"at_{solicitacao_id}"
+                data_criacao = row.get("data_criacao")
+                horas_aberta = 0
+
+                if data_criacao:
+                    try:
+                        if data_criacao.tzinfo is None:
+                            data_base = data_criacao.replace(tzinfo=APP_TZ)
+                        else:
+                            data_base = data_criacao
+                        horas_aberta = (agora() - data_base).total_seconds() / 3600
+                    except Exception:
+                        horas_aberta = 0
+
+                cor_fundo = "rgba(255,255,255,0.02)"
+                borda = "rgba(120,145,170,0.18)"
+
+                if status_atual != "Concluído":
+                    if horas_aberta >= 48:
+                        cor_fundo = "rgba(160, 40, 40, 0.28)"
+                        borda = "rgba(255, 90, 90, 0.55)"
+                    elif horas_aberta >= 24:
+                        cor_fundo = "rgba(170, 130, 25, 0.28)"
+                        borda = "rgba(255, 200, 80, 0.55)"
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        background:{cor_fundo};
+                        border:1px solid {borda};
+                        border-radius:14px;
+                        padding:14px 16px;
+                        margin-bottom:10px;
+                    ">
+                        <div style="display:grid; grid-template-columns: 80px 1fr 160px 180px; gap:12px; align-items:center;">
+                            <div><b>#{solicitacao_id}</b></div>
+                            <div><b>{html.escape(str(row['titulo']))}</b></div>
+                            <div>Prioridade: <b>{html.escape(str(row['prioridade']))}</b></div>
+                            <div>Status: <b>{formatar_status_texto(status_atual)}</b></div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                with st.expander(
+                    f"Ver detalhes da solicitação #{solicitacao_id}", expanded=False
+                ):
+                    st.write("**Descrição:**")
+                    st.write(row["descricao"] or "-")
+
+                    if data_criacao:
+                        st.caption(
+                            f"Aberta em: {data_criacao.strftime('%d/%m/%Y %H:%M')} • {horas_aberta:.1f}h em aberto"
                         )
 
-                    obs_key = f"obs_at_{solicitacao_id}"
+                    render_anexos_como_arquivo(
+                        solicitacao_id,
+                        prefixo=f"admin_{solicitacao_id}",
+                    )
+
+                    obs_key = f"obs_{solicitacao_id}"
                     if obs_key not in st.session_state:
                         st.session_state[obs_key] = (
                             row["resposta"] if row["resposta"] else ""
@@ -2138,12 +2196,64 @@ elif menu == "Demandas Solicitadas":
                         placeholder="Digite aqui a observação para o cliente...",
                     )
 
-                    ac1, ac2, ac3 = st.columns([1.2, 1.2, 4])
+                    nome_atendente_atual = row.get("atendente_nome") or "Não atribuído"
+                    st.caption(f"Atendente atual: {nome_atendente_atual}")
+
+                    if atendentes_ativos:
+                        opcoes_atendentes = {
+                            atendente["nome"]: atendente["id"]
+                            for atendente in atendentes_ativos
+                        }
+                        nomes_atendentes = list(opcoes_atendentes.keys())
+
+                        indice_atendente = 0
+                        if row.get("atendente_id"):
+                            for idx_at, atendente in enumerate(atendentes_ativos):
+                                if atendente["id"] == row.get("atendente_id"):
+                                    indice_atendente = idx_at
+                                    break
+
+                        ac_at1, ac_at2 = st.columns([2.4, 1])
+                        with ac_at1:
+                            atendente_sel = st.selectbox(
+                                "Atendente responsável",
+                                nomes_atendentes,
+                                index=indice_atendente,
+                                key=f"atendente_{solicitacao_id}",
+                            )
+                        with ac_at2:
+                            st.write("")
+                            st.write("")
+                            if st.button(
+                                "Atribuir",
+                                key=f"atribuir_atendente_{solicitacao_id}",
+                                use_container_width=True,
+                            ):
+                                conn.execute(
+                                    """
+                                    UPDATE solicitacoes
+                                    SET atendente_id = %s,
+                                        atribuido_em = %s
+                                    WHERE id = %s
+                                    """,
+                                    (
+                                        opcoes_atendentes[atendente_sel],
+                                        agora(),
+                                        solicitacao_id,
+                                    ),
+                                )
+                                st.success("Atendente atribuído.")
+                                st.rerun()
+                    else:
+                        st.info("Nenhum atendente ativo cadastrado.")
+
+                    ac1, ac2, ac3 = st.columns([1.2, 1.2, 3])
+
                     if status_atual == "Em análise":
                         with ac1:
                             if st.button(
                                 "INICIAR",
-                                key=f"iniciar_at_{solicitacao_id}",
+                                key=f"iniciar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
@@ -2152,11 +2262,12 @@ elif menu == "Demandas Solicitadas":
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
+
                     elif status_atual == "Em atendimento":
                         with ac1:
                             if st.button(
                                 "AGUARDAR CLIENTE",
-                                key=f"aguardar_at_{solicitacao_id}",
+                                key=f"aguardar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
@@ -2168,7 +2279,7 @@ elif menu == "Demandas Solicitadas":
                         with ac2:
                             if st.button(
                                 "FINALIZAR",
-                                key=f"finalizar_at_{solicitacao_id}",
+                                key=f"finalizar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
@@ -2177,11 +2288,12 @@ elif menu == "Demandas Solicitadas":
                                     st.session_state[obs_key],
                                 )
                                 st.rerun()
+
                     elif status_atual == "Aguardando cliente":
                         with ac1:
                             if st.button(
                                 "RETOMAR",
-                                key=f"retomar_at_{solicitacao_id}",
+                                key=f"retomar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
@@ -2193,7 +2305,7 @@ elif menu == "Demandas Solicitadas":
                         with ac2:
                             if st.button(
                                 "FINALIZAR",
-                                key=f"finalizar_at2_{solicitacao_id}",
+                                key=f"finalizar_aguardando_{solicitacao_id}",
                                 use_container_width=True,
                             ):
                                 atualizar_solicitacao(
