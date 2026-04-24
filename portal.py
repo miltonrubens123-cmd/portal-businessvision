@@ -1640,7 +1640,7 @@ def render_sidebar_menu(menu_options, current_menu, logo_b64):
         "Dashboard": "dashboard",
         "Demandas Solicitadas": "demandas",
         "Nova Solicitação": "nova",
-        "Briefing de Projeto": "projetos",
+        "Solicitação de Projeto": "projetos",
         "Cadastro de Clientes": "clientes",
         "Cadastro de Atendentes": "atendentes",
         "Painel de Cadastros": "cadastros",
@@ -1707,7 +1707,7 @@ st.caption("Gestão de demandas e acompanhamento em tempo real")
 menu_options_admin = [
     "Nova Solicitação",
     "Demandas Solicitadas",
-    "Briefing de Projeto",
+    "Solicitação de Projeto",
     "Dashboard",
     "Cadastro de Clientes",
     "Cadastro de Atendentes",
@@ -1716,9 +1716,9 @@ menu_options_admin = [
 menu_options_cliente = [
     "Nova Solicitação",
     "Demandas Solicitadas",
-    "Briefing de Projeto",
+    "Solicitação de Projeto",
 ]
-menu_options_atendente = ["Demandas Solicitadas", "Briefing de Projeto"]
+menu_options_atendente = ["Demandas Solicitadas", "Solicitação de Projeto"]
 
 perfil_atual = st.session_state.get("perfil")
 if perfil_atual == "admin":
@@ -1961,6 +1961,11 @@ if menu == "Nova Solicitação":
 
 elif menu == "Demandas Solicitadas":
     st.header("Demandas Solicitadas")
+    st.caption(
+        """
+    Acompanhe aqui todas as suas solicitações, status de atendimento e respostas da equipe.
+    """
+    )
 
     col_legenda1, col_legenda2 = st.columns([8, 1])
     with col_legenda2:
@@ -2381,10 +2386,12 @@ elif menu == "Demandas Solicitadas":
         st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
 
 
-elif menu == "Briefing de Projeto":
-    st.header("Briefing de Projeto")
+elif menu == "Solicitação de Projeto":
+    st.header("Solicitação de Projeto")
     st.caption(
-        "Solicitação e acompanhamento de novos projetos, levantamentos e evoluções sob medida."
+        """
+    Descreva o projeto que você precisa. Nossa equipe irá analisar e retornar com a melhor solução.
+    """
     )
 
     status_opcoes_projeto = [
@@ -2527,7 +2534,7 @@ elif menu == "Briefing de Projeto":
         )
     else:
         projetos = []
-        st.info("Perfil de atendente não possui acesso ao briefing de projetos.")
+        st.info("Perfil de atendente não possui acesso ao Solicitação de Projetos.")
 
     if not projetos:
         st.info("Nenhum briefing encontrado com os filtros aplicados.")
