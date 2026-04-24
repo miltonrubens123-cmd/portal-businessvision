@@ -1735,23 +1735,82 @@ def render_historico_solicitacao(solicitacao_id):
         st.info("Nenhum registro de acompanhamento ainda.")
         return
 
-    st.markdown("**Histórico de acompanhamento:**")
+    st.markdown("**Linha do tempo do atendimento:**")
 
     for item in historico:
         data_txt = (
-            item["data_registro"].strftime("%d/%m/%Y %H:%M")
+            item["data_registro"].strftime("%d/%m/%Y")
             if item.get("data_registro")
             else "-"
         )
+        hora_txt = (
+            item["data_registro"].strftime("%H:%M") if item.get("data_registro") else ""
+        )
 
-        with st.container(border=True):
-            c1, c2 = st.columns([1.2, 4])
-            with c1:
-                st.write(f"**{data_txt}**")
-                st.caption(item.get("usuario") or "-")
-            with c2:
-                st.write(f"**{item.get('status') or '-'}**")
-                st.write(item.get("observacao") or "-")
+        status = item.get("status") or "-"
+        observacao = item.get("observacao") or "-"
+        usuario = item.get("usuario") or "-"
+
+        if status == "Concluído":
+            cor = "#2F80ED"
+        elif status == "Aguardando cliente":
+            cor = "#F2C94C"
+        elif status == "Em atendimento":
+            cor = "#27AE60"
+        else:
+            cor = "#9AA8B5"
+
+        st.markdown(
+            f"""
+            <div style="
+                display:grid;
+                grid-template-columns: 120px 22px 1fr;
+                gap:12px;
+                margin-bottom:14px;
+                align-items:start;
+            ">
+                <div style="font-size:12px;color:#9AA8B5;text-align:right;padding-top:2px;">
+                    <b>{data_txt}</b><br>
+                    {hora_txt}
+                </div>
+
+                <div style="display:flex;flex-direction:column;align-items:center;">
+                    <div style="
+                        width:14px;
+                        height:14px;
+                        border-radius:50%;
+                        background:{cor};
+                        border:2px solid rgba(255,255,255,0.35);
+                        margin-top:3px;
+                    "></div>
+                    <div style="
+                        width:2px;
+                        min-height:54px;
+                        background:rgba(154,168,181,0.25);
+                        margin-top:4px;
+                    "></div>
+                </div>
+
+                <div style="
+                    border:1px solid rgba(120,145,170,0.18);
+                    background:rgba(255,255,255,0.025);
+                    border-radius:12px;
+                    padding:10px 12px;
+                ">
+                    <div style="font-weight:700;color:#EAF2FF;margin-bottom:4px;">
+                        {html.escape(status)}
+                    </div>
+                    <div style="font-size:13px;color:#D7E2EE;line-height:1.45;">
+                        {html.escape(observacao)}
+                    </div>
+                    <div style="font-size:11px;color:#8FA5BC;margin-top:6px;">
+                        Registrado por {html.escape(usuario)}
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def render_sidebar_menu(menu_options, current_menu, logo_b64):
