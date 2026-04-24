@@ -190,12 +190,16 @@ def verificar_senha(senha_informada, senha_armazenada):
 
     return hmac.compare_digest(senha_armazenada, senha_informada or "")
 
+
 def autenticar_usuario(usuario, senha):
-    user = conn.execute("""
+    user = conn.execute(
+        """
         SELECT *
         FROM usuarios
         WHERE usuario = %s AND ativo = TRUE
-    """, (usuario,)).fetchone()
+    """,
+        (usuario,),
+    ).fetchone()
 
     if not user:
         return None
@@ -204,7 +208,6 @@ def autenticar_usuario(usuario, senha):
         return None
 
     return user
-
 
 
 def autenticar_admin(usuario_digitado, senha_digitada):
@@ -1511,9 +1514,7 @@ if not st.session_state.logado:
             if not usuario_digitado or not senha_digitada:
                 st.error("Informe usuário e senha.")
             elif autenticar_admin(usuario_digitado, senha_digitada):
-                token = criar_sessao_login(
-                    usuario_digitado, "admin", "Nova Solicitação"
-                )
+                token = criar_sessao_login(usuario_digitado, "Nova Solicitação")
                 st.session_state.logado = True
                 st.session_state.usuario = usuario_digitado
                 st.session_state.perfil = "admin"
@@ -1524,12 +1525,38 @@ if not st.session_state.logado:
             else:
                 cliente = autenticar_cliente(usuario_digitado, senha_digitada)
                 if cliente:
-                    token = criar_sessao_login(
-                        usuario_digitado, "cliente", "Nova Solicitação"
+                    st.session_state.logado = True
+                    st.session_state.usuario = cliente["usuario"]
+
+                    perfil_banco = conn.execute(
+                        "SELECT perfil FROM usuarios WHERE usuario = %s LIMIT 1",
+                        (usuario_digitado,),
+                    ).fetchone()
+
+                    perfil_usuario = (
+                        perfil_banco["perfil"] if perfil_banco else "cliente"
                     )
+
+                    st.session_state.perfil = perfil_usuario
+
+                    token = criar_sessao_login(
+                        usuario_digitado, perfil_usuario, "Nova Solicitação"
+                    )
+                    st.session_state.perfil = perfil_usuario
                     st.session_state.logado = True
                     st.session_state.usuario = usuario_digitado
-                    st.session_state.perfil = "cliente"
+                    perfil_banco = conn.execute(
+                        "SELECT perfil FROM usuarios WHERE usuario = %s LIMIT 1",
+                        (usuario_digitado,),
+                    ).fetchone()
+
+                    perfil_usuario = (
+                        perfil_banco["perfil"]
+                        if perfil_banco and perfil_banco["perfil"]
+                        else "cliente"
+                    )
+
+                    st.session_state.perfil = perfil_usuario
                     st.session_state.menu_atual = "Nova Solicitação"
                     st.session_state.token_sessao = token
                     persistir_query_params()
