@@ -1780,8 +1780,14 @@ with st.sidebar:
 
 
 if menu == "Nova Solicitação":
-    st.header("Nova Solicitação")
+    st.markdown("### 📌 Abrir nova solicitação")
 
+    st.caption(
+        """
+    Descreva sua necessidade com detalhes e, se possível, anexe evidências.
+    Isso agiliza a análise e reduz o tempo de atendimento.
+    """
+    )
     if st.session_state.get("limpar_campos_nova_solicitacao", False):
         st.session_state["titulo"] = ""
         st.session_state["descricao"] = ""
