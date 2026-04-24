@@ -1563,13 +1563,7 @@ def aplicar_design_portal():
              width: 290px !important;
         }
 
-        [data-testid="collapsedControl"] {
-            display: block !important;
-            position: fixed !important;
-            top: 18px !important;
-            left: 18px !important;
-            z-index: 999999 !important;
-        }
+        
         section[data-testid="stSidebar"] * { color: #EAF2FF !important; }
         .stTextInput > div > div > input,
         .stTextArea textarea,
