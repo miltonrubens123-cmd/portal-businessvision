@@ -488,6 +488,44 @@ def criar_tabelas():
     if not coluna_existe("convites_cadastro", "usuario_sugerido"):
         conn.execute("ALTER TABLE convites_cadastro ADD COLUMN usuario_sugerido TEXT")
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS projetos_briefing (
+            id BIGSERIAL PRIMARY KEY,
+            empresa_id BIGINT REFERENCES empresas(id),
+            cliente_id BIGINT REFERENCES clientes(id),
+            titulo TEXT NOT NULL,
+            descricao TEXT NOT NULL,
+            objetivo TEXT,
+            prioridade TEXT,
+            status TEXT DEFAULT 'Em análise',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em TIMESTAMP
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS projetos_etapas (
+            id BIGSERIAL PRIMARY KEY,
+            projeto_id BIGINT NOT NULL REFERENCES projetos_briefing(id) ON DELETE CASCADE,
+            etapa TEXT NOT NULL,
+            observacao TEXT,
+            data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            usuario TEXT,
+            visivel_cliente BOOLEAN DEFAULT TRUE
+        )
+        """
+    )
+
+    for coluna in ["objetivo", "prioridade", "atualizado_em"]:
+        if not coluna_existe("projetos_briefing", coluna):
+            if coluna == "atualizado_em":
+                conn.execute("ALTER TABLE projetos_briefing ADD COLUMN atualizado_em TIMESTAMP")
+            else:
+                conn.execute(f"ALTER TABLE projetos_briefing ADD COLUMN {coluna} TEXT")
+
 
 RUN_DB_BOOTSTRAP = os.getenv("RUN_DB_BOOTSTRAP", "false").lower() == "true"
 if RUN_DB_BOOTSTRAP:
@@ -965,6 +1003,121 @@ def obter_solicitacoes_filtradas(
     return dados
 
 
+
+def normalizar_status_projeto(status):
+    mapa = {
+        "Novo": "Em análise",
+        "Pendente": "Em análise",
+        "Em análise": "Em análise",
+        "Levantamento": "Levantamento",
+        "Proposta": "Proposta",
+        "Aprovado": "Aprovado",
+        "Em desenvolvimento": "Em desenvolvimento",
+        "Pausado": "Pausado",
+        "Concluído": "Concluído",
+        "Cancelado": "Cancelado",
+    }
+    return mapa.get(status, status or "Em análise")
+
+
+def formatar_status_projeto(status):
+    status = normalizar_status_projeto(status)
+    mapa = {
+        "Em análise": "🔴 Em análise",
+        "Levantamento": "🟡 Levantamento",
+        "Proposta": "🟣 Proposta",
+        "Aprovado": "🟢 Aprovado",
+        "Em desenvolvimento": "🟢 Em desenvolvimento",
+        "Pausado": "🟠 Pausado",
+        "Concluído": "🔵 Concluído",
+        "Cancelado": "⚫ Cancelado",
+    }
+    return mapa.get(status, status)
+
+
+def obter_briefings_filtrados(cliente_id=None, empresa_id=None, status_filtro="Todos", busca="", limite=200):
+    filtros = []
+    params = []
+
+    if cliente_id is not None:
+        filtros.append("p.cliente_id = %s")
+        params.append(cliente_id)
+    elif empresa_id is not None:
+        filtros.append("p.empresa_id = %s")
+        params.append(empresa_id)
+
+    if status_filtro != "Todos":
+        filtros.append("COALESCE(p.status, 'Em análise') = %s")
+        params.append(status_filtro)
+
+    busca = (busca or "").strip()
+    if busca:
+        if busca.isdigit():
+            filtros.append("(CAST(p.id AS TEXT) = %s OR p.titulo ILIKE %s OR p.descricao ILIKE %s)")
+            params.extend([busca, f"%{busca}%", f"%{busca}%"])
+        else:
+            filtros.append("(p.titulo ILIKE %s OR p.descricao ILIKE %s OR COALESCE(c.nome, '') ILIKE %s)")
+            params.extend([f"%{busca}%", f"%{busca}%", f"%{busca}%"])
+
+    where_clause = " AND ".join(filtros) if filtros else "TRUE"
+
+    sql = f"""
+        SELECT
+            p.id,
+            p.empresa_id,
+            p.cliente_id,
+            p.titulo,
+            p.descricao,
+            p.objetivo,
+            p.prioridade,
+            p.status,
+            p.created_at,
+            p.atualizado_em,
+            c.nome AS cliente_nome,
+            c.usuario AS cliente_usuario,
+            e.fantasia AS empresa_nome
+        FROM projetos_briefing p
+        LEFT JOIN clientes c ON c.id = p.cliente_id
+        LEFT JOIN empresas e ON e.id = p.empresa_id
+        WHERE {where_clause}
+        ORDER BY p.id DESC
+        LIMIT %s
+    """
+    params.append(limite)
+    return conn.execute(sql, params).fetchall()
+
+
+def obter_etapas_projeto(projeto_id, somente_visiveis=False):
+    filtro_visibilidade = "AND visivel_cliente = TRUE" if somente_visiveis else ""
+    return conn.execute(
+        f"""
+        SELECT id, projeto_id, etapa, observacao, data_registro, usuario, visivel_cliente
+        FROM projetos_etapas
+        WHERE projeto_id = %s
+        {filtro_visibilidade}
+        ORDER BY data_registro ASC, id ASC
+        """,
+        (projeto_id,),
+    ).fetchall()
+
+
+def render_timeline_projeto(projeto_id, somente_visiveis=False):
+    etapas = obter_etapas_projeto(projeto_id, somente_visiveis=somente_visiveis)
+    if not etapas:
+        st.info("Nenhuma etapa registrada ainda.")
+        return
+
+    for etapa in etapas:
+        data_txt = "-"
+        if etapa.get("data_registro"):
+            data_txt = etapa["data_registro"].strftime("%d/%m/%Y %H:%M")
+        visibilidade = "Visível ao cliente" if etapa.get("visivel_cliente") else "Interno"
+        with st.container(border=True):
+            st.write(f"**{etapa['etapa']}**")
+            if etapa.get("observacao"):
+                st.write(etapa["observacao"])
+            st.caption(f"Registrado em {data_txt} por {etapa.get('usuario') or '-'} • {visibilidade}")
+
 def agrupar_solicitacoes_por_cliente(solicitacoes):
     grupos = defaultdict(list)
     for item in solicitacoes:
@@ -1384,8 +1537,10 @@ def aplicar_design_portal():
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #03101d 0%, #051424 100%);
             border-right: 1px solid rgba(120,145,170,0.12);
-            min-width: 290px !important;
-            max-width: 290px !important;
+            transition: all 0.3s ease-in-out !important;
+        }
+        section[data-testid="stSidebar"] > div {
+            width: 290px !important;
         }
         section[data-testid="stSidebar"] * { color: #EAF2FF !important; }
         .stTextInput > div > div > input,
@@ -1428,27 +1583,13 @@ def aplicar_design_portal():
             margin-bottom: 8px;
         }
 
-        section[data-testid="stSidebar"] {
-            position: relative !important;
-            transition: all 0.3s ease-in-out !important;
-        }
         [data-testid="collapsedControl"] {
+            display: block !important;
             position: fixed !important;
             top: 18px !important;
             left: 18px !important;
             z-index: 999999 !important;
             transition: all 0.25s ease-in-out !important;
-        }
-        [data-testid="collapsedControl"] {
-            display: none !important;
-        }
-        section[data-testid="stSidebar"] > div {
-            width: 100% !important;
-        }
-        [data-testid="collapsedControl"] {
-            top: 20px !important;
-            left: 20px !important;
-            transition: all 0.3s ease-in-out !important;
         }
         .bv-sidebar-top { display:flex; align-items:center; gap:10px; margin:4px 0 18px 0; }
         .bv-sidebar-logo { width:34px; height:34px; flex-shrink:0; }
@@ -1475,6 +1616,7 @@ def svg_menu_icon(kind):
         "clientes": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3.2 2.9-5.3 6-5.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M21 19c0-3.2-2.9-5.3-6-5.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
         "atendentes": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 19c0-3.6 3.3-5.8 7-5.8s7 2.2 7 5.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
         "cadastros": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7.5h16M7 4.5v6M17 4.5v6M6.5 20h11a2 2 0 0 0 2-2v-8.5a2 2 0 0 0-2-2h-11a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2Z" stroke="currentColor" stroke-width="1.8"/><path d="M9 14h6M12 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+        "projetos": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 4h8l4 4v12H6V4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 4v5h5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 13h6M9 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
         "swap": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 7H19M19 7L15.5 3.5M19 7L15.5 10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17H5M5 17L8.5 13.5M5 17L8.5 20.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     }
     return icons.get(kind, icons["demandas"])
@@ -1485,6 +1627,7 @@ def render_sidebar_menu(menu_options, current_menu, logo_b64):
         "Dashboard": "dashboard",
         "Demandas Solicitadas": "demandas",
         "Nova Solicitação": "nova",
+        "Briefing de Projeto": "projetos",
         "Cadastro de Clientes": "clientes",
         "Cadastro de Atendentes": "atendentes",
         "Painel de Cadastros": "cadastros",
@@ -1551,12 +1694,13 @@ st.caption("Gestão de demandas e acompanhamento em tempo real")
 menu_options_admin = [
     "Nova Solicitação",
     "Demandas Solicitadas",
+    "Briefing de Projeto",
     "Dashboard",
     "Cadastro de Clientes",
     "Cadastro de Atendentes",
     "Painel de Cadastros",
 ]
-menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas"]
+menu_options_cliente = ["Nova Solicitação", "Demandas Solicitadas", "Briefing de Projeto"]
 menu_options_atendente = ["Demandas Solicitadas"]
 
 perfil_atual = st.session_state.get("perfil")
@@ -2213,6 +2357,221 @@ elif menu == "Demandas Solicitadas":
     if not encontrou_resultado and perfil_atual != "atendente":
         st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
 
+
+
+elif menu == "Briefing de Projeto":
+    st.header("Briefing de Projeto")
+    st.caption("Solicitação e acompanhamento de novos projetos, levantamentos e evoluções sob medida.")
+
+    status_opcoes_projeto = [
+        "Todos",
+        "Em análise",
+        "Levantamento",
+        "Proposta",
+        "Aprovado",
+        "Em desenvolvimento",
+        "Pausado",
+        "Concluído",
+        "Cancelado",
+    ]
+
+    if perfil_atual in ["admin", "cliente"]:
+        with st.expander("Nova solicitação de projeto", expanded=perfil_atual == "cliente"):
+            if perfil_atual == "admin":
+                clientes_ativos = conn.execute(
+                    """
+                    SELECT c.id, c.usuario, c.nome, c.empresa_id, e.fantasia AS empresa
+                    FROM clientes c
+                    LEFT JOIN empresas e ON e.id = c.empresa_id
+                    WHERE c.ativo = TRUE
+                    ORDER BY c.nome, c.usuario
+                    """
+                ).fetchall()
+                if clientes_ativos:
+                    lista_clientes = [
+                        f"{row['nome']} ({row['usuario']}) • {row.get('empresa') or 'Sem empresa'}"
+                        for row in clientes_ativos
+                    ]
+                    mapa_clientes = {
+                        f"{row['nome']} ({row['usuario']}) • {row.get('empresa') or 'Sem empresa'}": row
+                        for row in clientes_ativos
+                    }
+                    cliente_escolhido = st.selectbox("Cliente", lista_clientes, key="briefing_cliente_admin")
+                    cliente_briefing = mapa_clientes[cliente_escolhido]
+                else:
+                    cliente_briefing = None
+                    st.warning("Não há clientes ativos cadastrados.")
+            else:
+                cliente_briefing = obter_cliente_por_usuario(st.session_state.usuario)
+                st.text_input("Cliente", value=obter_nome_cliente(st.session_state.usuario), disabled=True, key="briefing_cliente_logado")
+
+            titulo_projeto = st.text_input("Título do projeto", key="briefing_titulo")
+            objetivo_projeto = st.text_input("Objetivo principal", key="briefing_objetivo")
+            descricao_projeto = st.text_area(
+                "Descreva o que precisa",
+                key="briefing_descricao",
+                placeholder="Explique o problema, processo atual, resultado esperado, relatórios/sistemas envolvidos e prazos desejados.",
+                height=140,
+            )
+            prioridade_projeto = st.selectbox("Prioridade", ["Alta", "Média", "Baixa"], index=1, key="briefing_prioridade")
+
+            if st.button("Enviar briefing", key="enviar_briefing", use_container_width=True):
+                if not cliente_briefing or not cliente_briefing.get("id"):
+                    st.error("Não foi possível identificar o cliente.")
+                elif not cliente_briefing.get("empresa_id"):
+                    st.error("O cliente precisa estar vinculado a uma empresa.")
+                elif not titulo_projeto.strip() or not descricao_projeto.strip():
+                    st.error("Preencha título e descrição do projeto.")
+                else:
+                    projeto = conn.execute(
+                        """
+                        INSERT INTO projetos_briefing
+                        (empresa_id, cliente_id, titulo, descricao, objetivo, prioridade, status, created_at, atualizado_em)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'Em análise', %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            cliente_briefing["empresa_id"],
+                            cliente_briefing["id"],
+                            titulo_projeto.strip(),
+                            descricao_projeto.strip(),
+                            objetivo_projeto.strip(),
+                            prioridade_projeto,
+                            agora(),
+                            agora(),
+                        ),
+                    ).fetchone()
+                    conn.execute(
+                        """
+                        INSERT INTO projetos_etapas
+                        (projeto_id, etapa, observacao, usuario, visivel_cliente, data_registro)
+                        VALUES (%s, %s, %s, %s, TRUE, %s)
+                        """,
+                        (
+                            projeto["id"],
+                            "Briefing recebido",
+                            "Solicitação de projeto registrada e encaminhada para análise inicial.",
+                            st.session_state.usuario,
+                            agora(),
+                        ),
+                    )
+                    st.success(f"Briefing #{projeto['id']} enviado com sucesso.")
+                    st.rerun()
+
+    f1, f2 = st.columns([1.2, 2.8])
+    with f1:
+        status_filtro_projeto = st.selectbox("Filtrar por status", status_opcoes_projeto, index=0, key="filtro_status_briefing")
+    with f2:
+        busca_projeto = st.text_input("Buscar por ID, título, descrição ou cliente", key="busca_briefing")
+
+    if perfil_atual == "admin":
+        projetos = obter_briefings_filtrados(status_filtro=status_filtro_projeto, busca=busca_projeto, limite=300)
+    elif perfil_atual == "cliente":
+        cliente_logado = obter_cliente_por_usuario(st.session_state.usuario)
+        projetos = obter_briefings_filtrados(
+            cliente_id=cliente_logado["id"] if cliente_logado else None,
+            status_filtro=status_filtro_projeto,
+            busca=busca_projeto,
+            limite=100,
+        )
+    else:
+        projetos = []
+        st.info("Perfil de atendente não possui acesso ao briefing de projetos.")
+
+    if not projetos:
+        st.info("Nenhum briefing encontrado com os filtros aplicados.")
+    else:
+        projetos, _, _ = paginar_registros(projetos, "pagina_briefing_projetos", page_size=8)
+        for projeto in projetos:
+            projeto_id = int(projeto["id"])
+            status_atual = normalizar_status_projeto(projeto.get("status"))
+            with st.container(border=True):
+                c1, c2, c3, c4 = st.columns([0.7, 3.2, 1.5, 1.6])
+                with c1:
+                    st.write(f"**#{projeto_id}**")
+                with c2:
+                    st.write(f"**{projeto['titulo']}**")
+                    st.caption(projeto.get("descricao") or "")
+                    if projeto.get("objetivo"):
+                        st.caption(f"Objetivo: {projeto['objetivo']}")
+                with c3:
+                    st.write(f"Prioridade: **{projeto.get('prioridade') or '-'}**")
+                    if perfil_atual == "admin":
+                        st.caption(f"Cliente: {projeto.get('cliente_nome') or projeto.get('cliente_usuario') or '-'}")
+                with c4:
+                    st.write(f"Status: **{formatar_status_projeto(status_atual)}**")
+                    if projeto.get("created_at"):
+                        st.caption(projeto["created_at"].strftime("%d/%m/%Y %H:%M"))
+
+                with st.expander(f"Timeline do briefing #{projeto_id}", expanded=False):
+                    render_timeline_projeto(
+                        projeto_id,
+                        somente_visiveis=(perfil_atual != "admin"),
+                    )
+
+                if perfil_atual == "admin":
+                    st.markdown("**Atualização administrativa**")
+                    a1, a2 = st.columns([1.2, 2.8])
+                    with a1:
+                        status_sem_todos = status_opcoes_projeto[1:]
+                        idx_status = status_sem_todos.index(status_atual) if status_atual in status_sem_todos else 0
+                        novo_status_projeto = st.selectbox(
+                            "Status",
+                            status_sem_todos,
+                            index=idx_status,
+                            key=f"status_projeto_{projeto_id}",
+                        )
+                        visivel_cliente = st.checkbox(
+                            "Visível para o cliente",
+                            value=True,
+                            key=f"visivel_etapa_{projeto_id}",
+                        )
+                    with a2:
+                        nova_etapa = st.text_input(
+                            "Etapa / título do registro",
+                            key=f"etapa_projeto_{projeto_id}",
+                            placeholder="Ex.: Levantamento técnico realizado",
+                        )
+                        obs_etapa = st.text_area(
+                            "Observação da etapa",
+                            key=f"obs_projeto_{projeto_id}",
+                            height=90,
+                            placeholder="Registro técnico/comercial do andamento. O cliente só verá se estiver marcado como visível.",
+                        )
+
+                    b1, b2 = st.columns([1.2, 3])
+                    with b1:
+                        if st.button("Salvar etapa", key=f"salvar_etapa_{projeto_id}", use_container_width=True):
+                            if not nova_etapa.strip() and not obs_etapa.strip() and novo_status_projeto == status_atual:
+                                st.error("Informe uma etapa, observação ou altere o status.")
+                            else:
+                                etapa_final = nova_etapa.strip() or f"Status atualizado para {novo_status_projeto}"
+                                conn.execute(
+                                    """
+                                    INSERT INTO projetos_etapas
+                                    (projeto_id, etapa, observacao, usuario, visivel_cliente, data_registro)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                    """,
+                                    (
+                                        projeto_id,
+                                        etapa_final,
+                                        obs_etapa.strip(),
+                                        st.session_state.usuario,
+                                        visivel_cliente,
+                                        agora(),
+                                    ),
+                                )
+                                conn.execute(
+                                    """
+                                    UPDATE projetos_briefing
+                                    SET status = %s,
+                                        atualizado_em = %s
+                                    WHERE id = %s
+                                    """,
+                                    (novo_status_projeto, agora(), projeto_id),
+                                )
+                                st.success("Etapa registrada com sucesso.")
+                                st.rerun()
 
 elif menu == "Dashboard" and perfil_atual == "admin":
     st.header("Dashboard")
