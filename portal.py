@@ -97,7 +97,6 @@ def validar_cpf(cpf):
 
 
 st.set_page_config(page_title="Portal Business Vision", layout="wide")
-st.error("VERSAO NOVA - TESTE DEPLOY")
 
 BASE_DIR = Path(__file__).parent
 APP_DATA_DIR = Path.home() / ".businessvision"
