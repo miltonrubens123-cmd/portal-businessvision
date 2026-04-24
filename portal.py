@@ -805,9 +805,9 @@ def formatar_status_texto(status):
     status = normalizar_status(status)
     status_map = {
         "Em análise": "🔴 Em análise",
-        "Em atendimento": "🟢 Em atendimento",
+        "Em atendimento": "🔘 Em atendimento",
         "Aguardando": "🟡 Aguardando",
-        "Concluído": "🔵 Concluído",
+        "Concluído": "🟢 Concluído",
     }
     return status_map.get(status, status)
 
@@ -2153,7 +2153,7 @@ elif menu == "Demandas Solicitadas":
             )
 
     if st.session_state.get("mostrar_legenda", False):
-        st.info("🔴 Em análise\n\n🟢 Em atendimento\n\n🟡 Aguardando\n\n🔵 Concluído")
+        st.info("🔴 Em análise\n\n🔘 Em atendimento\n\n🟡 Aguardando\n\n🟢 Concluído")
 
     f1, f2, f3 = st.columns([1.2, 1.2, 2.2])
     with f1:
@@ -2402,7 +2402,7 @@ elif menu == "Demandas Solicitadas":
 
                                 registrar_historico_solicitacao(
                                     solicitacao_id,
-                                    "Aguardando cliente",
+                                    "Aguardando",
                                     st.session_state[obs_key],
                                 )
 
