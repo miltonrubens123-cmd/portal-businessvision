@@ -21,79 +21,10 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-
-@st.cache_resource
-def get_connection():
-    database_url = None
-
-    if "database" in st.secrets and "url" in st.secrets["database"]:
-        database_url = st.secrets["database"]["url"]
-    else:
-        database_url = os.getenv("DATABASE_URL")
-
-    if not database_url:
-        raise RuntimeError("DATABASE_URL não configurado.")
-
-    return psycopg.connect(
-        database_url,
-        row_factory=dict_row,
-        autocommit=True,
-    )
-
-
-def get_conn():
-    return get_connection()
-
-
-def reset_connection():
-    get_connection.clear()
-    return get_connection()
-
-
-class SafeConnProxy:
-    def execute(self, *args, **kwargs):
-        try:
-            return get_conn().execute(*args, **kwargs)
-        except Exception:
-            return reset_connection().execute(*args, **kwargs)
-
-    def cursor(self, *args, **kwargs):
-        try:
-            return get_conn().cursor(*args, **kwargs)
-        except Exception:
-            return reset_connection().cursor(*args, **kwargs)
-
-
-def run_query(sql, params=None, fetchone=False, fetchall=False):
-    with get_conn().cursor() as cur:
-        cur.execute(sql, params or ())
-        if fetchone:
-            return cur.fetchone()
-        if fetchall:
-            return cur.fetchall()
-        return None
-
-
-def formatar_cnpj(cnpj):
-    cnpj = re.sub(r"\D", "", cnpj or "")
-    if len(cnpj) == 14:
-        return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
-    return cnpj
-
-
-def formatar_cpf(cpf):
-    cpf = re.sub(r"\D", "", cpf or "")
-    if len(cpf) == 11:
-        return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
-    return cpf
-
-
-def validar_cnpj(cnpj):
-    return len(re.sub(r"\D", "", cnpj or "")) == 14
-
-
-def validar_cpf(cpf):
-    return len(re.sub(r"\D", "", cpf or "")) == 11
+from database.connection import get_connection, get_conn, reset_connection, SafeConnProxy, run_query
+from utils.formatters import formatar_cnpj, formatar_cpf, validar_cnpj, validar_cpf
+from utils.security import obter_secret, obter_admin_config, senha_esta_hasheada, gerar_hash_senha, verificar_senha
+from utils.validators import validar_upload_imagem
 
 
 st.set_page_config(page_title="Portal Business Vision", layout="wide")
@@ -119,76 +50,6 @@ PASSWORD_SCHEME = "pbkdf2_sha256"
 PASSWORD_ITERATIONS = 390000
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "8"))
 CONVITE_EXPIRACAO_HORAS = int(os.getenv("CONVITE_EXPIRACAO_HORAS", "72"))
-
-
-def obter_secret(path, default=None):
-    try:
-        cursor = st.secrets
-        for key in path:
-            cursor = cursor[key]
-        return cursor
-    except Exception:
-        return default
-
-
-def obter_admin_config():
-    admin_user = (
-        obter_secret(["admin", "user"]) or os.getenv("ADMIN_USER") or ""
-    ).strip()
-
-    admin_password_hash = (
-        obter_secret(["admin", "password_hash"])
-        or os.getenv("ADMIN_PASSWORD_HASH")
-        or ""
-    ).strip()
-
-    admin_password_plain = (
-        obter_secret(["admin", "password"]) or os.getenv("ADMIN_PASSWORD") or ""
-    ).strip()
-
-    return {
-        "user": admin_user,
-        "password_hash": admin_password_hash,
-        "password_plain": admin_password_plain,
-    }
-
-
-def senha_esta_hasheada(valor):
-    return isinstance(valor, str) and valor.startswith(f"{PASSWORD_SCHEME}$")
-
-
-def gerar_hash_senha(senha):
-    if not isinstance(senha, str) or not senha.strip():
-        raise ValueError("Senha inválida para geração de hash.")
-
-    salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac(
-        "sha256",
-        senha.encode("utf-8"),
-        salt.encode("utf-8"),
-        PASSWORD_ITERATIONS,
-    )
-    return f"{PASSWORD_SCHEME}${PASSWORD_ITERATIONS}${salt}${dk.hex()}"
-
-
-def verificar_senha(senha_informada, senha_armazenada):
-    if not senha_armazenada or not isinstance(senha_armazenada, str):
-        return False
-
-    if senha_esta_hasheada(senha_armazenada):
-        try:
-            _, iteracoes, salt, hash_salvo = senha_armazenada.split("$", 3)
-            dk = hashlib.pbkdf2_hmac(
-                "sha256",
-                (senha_informada or "").encode("utf-8"),
-                salt.encode("utf-8"),
-                int(iteracoes),
-            )
-            return hmac.compare_digest(dk.hex(), hash_salvo)
-        except Exception:
-            return False
-
-    return hmac.compare_digest(senha_armazenada, senha_informada or "")
 
 
 def autenticar_usuario(usuario, senha):
@@ -279,25 +140,6 @@ def autenticar_atendente(usuario_digitado, senha_digitada):
     if verificar_senha(senha_digitada, atendente["senha"] or ""):
         return atendente
     return None
-
-
-def validar_upload_imagem(arquivo):
-    nome = (arquivo.name or "").lower()
-    ext_permitidas = {".png", ".jpg", ".jpeg"}
-    ext = Path(nome).suffix.lower()
-
-    if ext not in ext_permitidas:
-        return False, "Tipo de arquivo inválido. Envie apenas PNG, JPG ou JPEG."
-
-    tamanho = len(arquivo.getvalue())
-    limite = MAX_UPLOAD_MB * 1024 * 1024
-    if tamanho > limite:
-        return (
-            False,
-            f"O arquivo {arquivo.name} excede o limite de {MAX_UPLOAD_MB} MB.",
-        )
-
-    return True, ""
 
 
 admin_config = obter_admin_config()
@@ -787,29 +629,93 @@ def paginar_registros(registros, state_key, page_size=12):
     return registros[inicio:fim], pagina_atual, total_paginas
 
 
+def salvar_etapa_projeto(solicitacao_id, status, titulo, observacao, atendente, visivel_cliente=True):
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO projeto_etapas 
+            (solicitacao_id, status, titulo, observacao, atendente, visivel_cliente, criado_em)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (solicitacao_id, status, titulo, observacao, atendente, visivel_cliente)
+        )
+
+def buscar_etapas_projeto(solicitacao_id, cliente=False):
+    with get_conn() as conn:
+        if cliente:
+            return conn.execute(
+                """
+                SELECT *
+                FROM projeto_etapas
+                WHERE solicitacao_id = %s
+                  AND visivel_cliente = TRUE
+                ORDER BY criado_em DESC
+                """,
+                (solicitacao_id,)
+            ).fetchall()
+
+        return conn.execute(
+            """
+            SELECT *
+            FROM projeto_etapas
+            WHERE solicitacao_id = %s
+            ORDER BY criado_em DESC
+            """,
+            (solicitacao_id,)
+        ).fetchall()
+    
+
 def normalizar_status(status):
+    status = (status or "").strip()
+
     mapa = {
         "Pendente": "Em análise",
+        "Novo": "Em análise",
         "Iniciado": "Em atendimento",
+        "Em andamento": "Em atendimento",
+
         "Pausado": "Aguardando",
+        "Aguardando cliente": "Aguardando",
+        "Aguardando Cliente": "Aguardando",
+        "Aguardando retorno": "Aguardando",
+        "Aguardando": "Aguardando",
+
         "Resolvido": "Concluído",
+        "Finalizado": "Concluído",
+        "Finalizada": "Concluído",
+        "Concluido": "Concluído",
+        "Concluído": "Concluído",
+
         "Em análise": "Em análise",
         "Em atendimento": "Em atendimento",
-        "Aguardando": "Aguardando",
-        "Concluído": "Concluído",
     }
+
     return mapa.get(status, status)
 
-
 def formatar_status_texto(status):
+    return normalizar_status(status)
+
+def status_badge_html(status):
     status = normalizar_status(status)
-    status_map = {
-        "Em análise": "🔴 Em análise",
-        "Em atendimento": "🔘 Em atendimento",
-        "Aguardando": "🟡 Aguardando",
-        "Concluído": "🟢 Concluído",
+
+    cores = {
+        "Em análise": "#FF5C7A",
+        "Em atendimento": "#5EA8FF",
+        "Aguardando": "#F5C451",
+        "Concluído": "#43D17A",
     }
-    return status_map.get(status, status)
+
+    cor = cores.get(status, "#AAB7C4")
+
+    return (
+        f'<span style="display:inline-flex;align-items:center;gap:7px;'
+        f'padding:4px 9px;border-radius:999px;background:rgba(255,255,255,0.04);'
+        f'border:1px solid rgba(120,145,170,0.18);color:{cor};'
+        f'font-size:12px;font-weight:800;white-space:nowrap;">'
+        f'<svg width="8" height="8" viewBox="0 0 8 8">'
+        f'<circle cx="4" cy="4" r="4" fill="{cor}"/></svg>'
+        f'{html.escape(status)}</span>'
+    )
 
 
 def obter_atendentes_ativos():
@@ -1047,17 +953,50 @@ def normalizar_status_projeto(status):
 
 def formatar_status_projeto(status):
     status = normalizar_status_projeto(status)
-    mapa = {
-        "Em análise": "🔴 Em análise",
-        "Levantamento": "🟡 Levantamento",
-        "Proposta": "🟣 Proposta",
-        "Aprovado": "🟢 Aprovado",
-        "Em desenvolvimento": "🟢 Em desenvolvimento",
-        "Pausado": "🟠 Pausado",
-        "Concluído": "🔵 Concluído",
-        "Cancelado": "⚫ Cancelado",
+
+    estilos = {
+        "Em análise": "#FF5C7A",
+        "Levantamento": "#F5C451",
+        "Proposta": "#A78BFA",
+        "Aprovado": "#43D17A",
+        "Em desenvolvimento": "#5EA8FF",
+        "Pausado": "#FF8A4C",
+        "Concluído": "#7DD3FC",
+        "Cancelado": "#6B7280",
     }
-    return mapa.get(status, status)
+
+    cor = estilos.get(status, "#AAB7C4")
+
+    return f"""
+    <span style="
+        display:inline-flex;
+        align-items:center;
+        gap:7px;
+
+        padding:4px 10px;
+
+        border-radius:999px;
+
+        background:rgba(255,255,255,0.04);
+
+        border:1px solid rgba(120,145,170,0.18);
+
+        color:{cor};
+
+        font-size:12px;
+        font-weight:800;
+
+        white-space:nowrap;
+    ">
+
+        <svg width="8" height="8" viewBox="0 0 8 8">
+            <circle cx="4" cy="4" r="4" fill="{cor}"/>
+        </svg>
+
+        {html.escape(status)}
+
+    </span>
+    """
 
 
 def obter_briefings_filtrados(
@@ -1589,10 +1528,6 @@ if not st.session_state.logado:
                         else:
                             st.error("Usuário ou senha inválidos.")
     st.stop()
-# DEBUG TEMPORÁRIO
-st.write("Usuário:", st.session_state.usuario)
-st.write("Perfil:", st.session_state.perfil)
-
 
 def aplicar_design_portal():
     st.markdown(
@@ -1602,23 +1537,76 @@ def aplicar_design_portal():
             background: linear-gradient(180deg, #020b16 0%, #04111f 100%);
             color: #EAF2FF;
         }
-        [data-testid="stHeader"] { background: transparent; }
+
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
+
         .block-container {
             padding-top: 1.15rem;
             padding-bottom: 1.8rem;
             max-width: 1380px;
         }
+
         section[data-testid="stSidebar"] {
+            min-width: 300px !important;
+            max-width: 300px !important;
+            width: 300px !important;
             background: linear-gradient(180deg, #03101d 0%, #051424 100%);
             border-right: 1px solid rgba(120,145,170,0.12);
             transition: all 0.3s ease-in-out !important;
         }
+
         section[data-testid="stSidebar"] > div {
-             width: 290px !important;
+            min-width: 300px !important;
+            max-width: 300px !important;
+            width: 300px !important;
+            padding-left: 18px !important;
+            padding-right: 18px !important;
         }
 
-        
-        section[data-testid="stSidebar"] * { color: #EAF2FF !important; }
+        section[data-testid="stSidebar"] * {
+            color: #EAF2FF !important;
+        }
+
+        section[data-testid="stSidebar"] .stButton > button {
+            width: 100%;
+            min-height: 42px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            padding-left: 12px !important;
+            padding-right: 10px !important;
+            margin-bottom: 8px;
+        }
+
+        section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+            background: transparent !important;
+            border: 1px solid transparent !important;
+            color: #B9C8D9 !important;
+        }
+
+        section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+            background: rgba(38,79,150,0.72) !important;
+            border: 1px solid rgba(120,166,255,0.15) !important;
+            color: #FFFFFF !important;
+        }
+
+        section[data-testid="stSidebar"] > div {
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 100vh !important;
+        }
+
+        .bv-sidebar-spacer {
+            flex: 1;
+        }
+
         .stTextInput > div > div > input,
         .stTextArea textarea,
         .stSelectbox > div > div,
@@ -1629,6 +1617,7 @@ def aplicar_design_portal():
             border-radius: 10px !important;
             box-shadow: none !important;
         }
+
         .stButton > button {
             width: 100%;
             border-radius: 12px;
@@ -1638,38 +1627,165 @@ def aplicar_design_portal():
             color: #FFFFFF;
             box-shadow: none;
         }
-        section[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
-            background: transparent !important;
-            border: 1px solid transparent !important;
-            color: #B9C8D9 !important;
-            text-align: left !important;
-            justify-content: flex-start !important;
-            min-height: 40px;
-            padding-left: 10px !important;
-            margin-bottom: 8px;
+
+        .bv-sidebar-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 4px 0 22px 0;
+            width: 100%;
         }
-        section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
-            background: rgba(38,79,150,0.72) !important;
-            border: 1px solid rgba(120,166,255,0.15) !important;
-            color: #FFFFFF !important;
-            text-align: left !important;
-            justify-content: flex-start !important;
-            min-height: 40px;
-            padding-left: 10px !important;
+
+        .bv-sidebar-logo {
+            width: 42px;
+            height: 42px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .bv-sidebar-title {
+            font-size: 16px;
+            font-weight: 800;
+            color: #F7FBFF;
+            line-height: 1.2;
+            white-space: normal;
+        }
+
+        .bv-menu-heading {
+            font-size: 11px;
+            letter-spacing: .08em;
+            font-weight: 800;
+            color: #7F93A8 !important;
+            margin: 8px 0 10px 0;
+            text-transform: uppercase;
+        }
+
+        .bv-menu-icon-wrap {
+            width: 42px;
+            min-width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #B9C8D9;
+            border-radius: 12px;
             margin-bottom: 8px;
         }
 
-        .bv-sidebar-top { display:flex; align-items:center; gap:10px; margin:4px 0 18px 0; }
-        .bv-sidebar-logo { width:34px; height:34px; flex-shrink:0; }
-        .bv-sidebar-title { font-size:16px; font-weight:700; color:#F7FBFF; line-height:1.2; }
-        .bv-menu-heading { font-size:11px; letter-spacing:.08em; font-weight:700; color:#7F93A8; margin:8px 0 10px 0; text-transform:uppercase; }
-        .bv-menu-icon-wrap { width:100%; min-height:40px; display:flex; align-items:center; justify-content:center; color:#B9C8D9; border-radius:12px; margin-bottom:8px; }
-        .bv-menu-icon-wrap.active { background: rgba(38,79,150,0.72); color:#FFFFFF; border: 1px solid rgba(120,166,255,0.15); }
-        .bv-sidebar-divider { height:1px; background: rgba(120,145,170,0.16); margin:16px 0 18px 0; }
-        .bv-user-card { display:flex; align-items:center; gap:12px; margin-top:14px; margin-bottom:12px; }
-        .bv-user-avatar { width:44px; height:44px; border-radius:50%; background:#2B59C3; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:700; font-size:17px; flex-shrink:0; }
-        .bv-user-label { font-size:12px; color:#8FA5BC; line-height:1.2; }
-        .bv-user-name { font-size:15px; font-weight:700; color:#EAF2FF; line-height:1.3; word-break: break-word; }
+        .bv-menu-icon-wrap.active {
+            background: rgba(38,79,150,0.72);
+            color: #FFFFFF;
+            border: 1px solid rgba(120,166,255,0.15);
+        }
+
+        .bv-sidebar-divider {
+            height: 1px;
+            background: rgba(120,145,170,0.16);
+            margin: 18px 0 18px 0;
+        }
+
+        .bv-user-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            margin-top: 14px;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+
+        .bv-user-avatar {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+            border-radius: 50%;
+            background: #2B59C3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            font-weight: 800;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .bv-user-meta {
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .bv-user-label {
+            font-size: 11px;
+            color: #8FA5BC !important;
+            line-height: 1.2;
+            margin-bottom: 3px;
+        }
+
+        .bv-user-name {
+            font-size: 13px;
+            font-weight: 800;
+            color: #EAF2FF;
+            line-height: 1.25;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 190px;
+        }
+
+        .bv-kpi-card {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid rgba(120,145,170,0.18);
+            border-radius: 16px;
+            padding: 18px 20px;
+            min-height: 112px;
+            margin-bottom: 12px;
+        }
+
+        .bv-kpi-label {
+            color: #9AA8B5 !important;
+            font-size: 12px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .bv-kpi-value {
+            color: #FFFFFF !important;
+            font-size: 30px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .bv-section-card {
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(120,145,170,0.14);
+            border-radius: 18px;
+            padding: 20px 22px;
+            margin-bottom: 20px;
+        }
+
+        .bv-title-divider {
+            border: 1px solid rgba(120,145,170,0.12);
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 900px) {
+            section[data-testid="stSidebar"] {
+                min-width: 270px !important;
+                max-width: 270px !important;
+                width: 270px !important;
+            }
+
+            section[data-testid="stSidebar"] > div {
+                min-width: 270px !important;
+                max-width: 270px !important;
+                width: 270px !important;
+            }
+
+            .bv-user-name {
+                max-width: 160px;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1883,20 +1999,24 @@ st.markdown(
 st.caption("Gestão de demandas e acompanhamento em tempo real")
 
 menu_options_admin = [
+    "Dashboard",
     "Nova Solicitação",
     "Demandas Solicitadas",
-    "Solicitação de Projeto",
-    "Dashboard",
+    "Novo Projeto",
+    "Painel de Cadastros",
     "Cadastro de Clientes",
     "Cadastro de Atendentes",
-    "Painel de Cadastros",
 ]
 menu_options_cliente = [
     "Nova Solicitação",
     "Demandas Solicitadas",
-    "Solicitação de Projeto",
+    "Novo Projeto",
 ]
-menu_options_atendente = ["Demandas Solicitadas", "Solicitação de Projeto"]
+menu_options_atendente = ["Dashboard",
+                          "Nova Solicitação",
+                          "Demandas Solicitadas", 
+                          "Novo Projeto",
+                          ]
 
 perfil_atual = st.session_state.get("perfil")
 if perfil_atual == "admin":
@@ -1919,7 +2039,7 @@ persistir_query_params()
 
 with st.sidebar:
     render_sidebar_menu(menu_options=menu_options, current_menu=menu, logo_b64=logo_b64)
-    st.markdown('<div style="flex:1;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="bv-sidebar-spacer"></div>', unsafe_allow_html=True)
     st.markdown('<div class="bv-sidebar-divider"></div>', unsafe_allow_html=True)
 
     nome_usuario = (st.session_state.usuario or "").replace("_", " ").strip()
@@ -2006,7 +2126,7 @@ if menu == "Nova Solicitação":
 
     st.subheader("Anexos de evidência")
     arquivos = st.file_uploader(
-        "Envie pelo menos 1 imagem",
+        "Selecione os arquivos",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="anexos_upload",
@@ -2016,7 +2136,7 @@ if menu == "Nova Solicitação":
     if arquivos:
         for idx, arq in enumerate(arquivos, start=1):
             st.caption(f"Arquivo {idx}: {arq.name}")
-            obs = st.text_input(f"Observação da imagem {idx}", key=f"obs_img_{idx}")
+            obs = st.text_input(f"Observação do arquivo {idx}", key=f"obs_img_{idx}")
             observacoes_anexos.append(obs)
 
     col_a, col_b, col_c = st.columns(3)
@@ -2045,11 +2165,9 @@ if menu == "Nova Solicitação":
             st.error("O cliente selecionado não está vinculado a nenhuma empresa.")
         elif not titulo_limpo or not descricao_limpa:
             st.warning("Preencha título e descrição antes de enviar.")
-        elif not arquivos or len(arquivos) == 0:
-            st.error("É obrigatório enviar pelo menos uma imagem.")
         else:
             uploads_invalidos = []
-            for arquivo in arquivos:
+            for arquivo in (arquivos or []):
                 ok, mensagem = validar_upload_imagem(arquivo)
                 if not ok:
                     uploads_invalidos.append(mensagem)
@@ -2111,7 +2229,7 @@ if menu == "Nova Solicitação":
                             )
                             solicitacao_id = cur.fetchone()["id"]
 
-                            for idx, arq in enumerate(arquivos):
+                            for idx, arq in enumerate(arquivos or []):
                                 cur.execute(
                                     """
                                     INSERT INTO anexos (solicitacao_id, nome_arquivo, observacao, imagem, data_criacao)
@@ -2281,7 +2399,7 @@ elif menu == "Demandas Solicitadas":
                             <div><b>#{solicitacao_id}</b></div>
                             <div><b>{html.escape(str(row['titulo']))}</b></div>
                             <div>Prioridade: <b>{html.escape(str(row['prioridade']))}</b></div>
-                            <div>Status: <b>{formatar_status_texto(status_atual)}</b></div>
+                            <div>Status: {status_badge_html(status_atual)}</div>
                         </div>
                     </div>
                     """,
@@ -2379,11 +2497,20 @@ elif menu == "Demandas Solicitadas":
                                 key=f"iniciar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
+                                observacao_inicio = st.session_state.get(obs_key, "")
+
                                 atualizar_solicitacao(
                                     solicitacao_id,
                                     "Em atendimento",
-                                    st.session_state[obs_key],
+                                    observacao_inicio,
                                 )
+
+                                registrar_historico_solicitacao(
+                                    solicitacao_id,
+                                    "Em atendimento",
+                                    f"Atendimento iniciado pelo atendente {st.session_state.usuario}. {observacao_inicio}",
+                                )
+
                                 st.rerun()
 
                     elif status_atual == "Em atendimento":
@@ -2436,16 +2563,18 @@ elif menu == "Demandas Solicitadas":
                                 key=f"retomar_{solicitacao_id}",
                                 use_container_width=True,
                             ):
+                                observacao_retomada = st.session_state.get(obs_key, "")
+
                                 atualizar_solicitacao(
                                     solicitacao_id,
                                     "Em atendimento",
-                                    st.session_state[obs_key],
+                                    observacao_retomada,
                                 )
 
                                 registrar_historico_solicitacao(
                                     solicitacao_id,
                                     "Em atendimento",
-                                    st.session_state[obs_key],
+                                    f"Atendimento retomado pelo atendente {st.session_state.usuario}. {observacao_retomada}",
                                 )
 
                                 st.rerun()
@@ -2530,6 +2659,7 @@ elif menu == "Demandas Solicitadas":
                         render_anexos_como_arquivo(
                             anexo_id, prefixo=f"cliente_{anexo_id}"
                         )
+
             else:
                 for _, row in df_cli.iterrows():
                     status_atual = normalizar_status(row["status"])
@@ -2572,7 +2702,7 @@ elif menu == "Demandas Solicitadas":
                                 <div><b>#{solicitacao_id}</b></div>
                                 <div><b>{html.escape(str(row['titulo']))}</b></div>
                                 <div>Prioridade: <b>{html.escape(str(row['prioridade']))}</b></div>
-                                <div>Status: <b>{formatar_status_texto(status_atual)}</b></div>
+                                <div>Status: {status_badge_html(status_atual)}</div>
                             </div>
                         </div>
                         """,
@@ -2594,6 +2724,8 @@ elif menu == "Demandas Solicitadas":
                             solicitacao_id,
                             prefixo=f"admin_{solicitacao_id}",
                         )
+
+                        render_historico_solicitacao(solicitacao_id)
 
                         obs_key = f"obs_{solicitacao_id}"
                         if obs_key not in st.session_state:
@@ -2735,8 +2867,8 @@ elif menu == "Demandas Solicitadas":
         st.info("Nenhuma solicitação encontrada com os filtros aplicados.")
 
 
-elif menu == "Solicitação de Projeto":
-    st.header("Solicitação de Projeto")
+elif menu == "Novo Projeto":
+    st.header("Novo Projeto")
     st.caption(
         """
     Descreva o projeto que você precisa. Nossa equipe irá analisar e retornar com a melhor solução.
@@ -3095,75 +3227,251 @@ elif menu == "Dashboard" and perfil_atual == "admin":
 
     total = len(df)
     ativas = len(df_ativas)
+    
+    status_operacao = "ESTÁVEL"
+    status_cor = "#43D17A"
 
+    if criticas_48h > 0:
+        status_operacao = "CRÍTICO"
+        status_cor = "#FF5C7A"
+    elif criticas_24h > 0:
+        status_operacao = "ATENÇÃO"
+        status_cor = "#F5C451"
+
+    st.markdown(
+        f'<div style="background:rgba(255,255,255,0.035);border:1px solid rgba(120,145,170,0.16);border-radius:22px;padding:24px 28px;margin-bottom:26px;">'
+        f'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:24px;">'
+        f'<div>'
+        f'<div style="color:#8FA5BC;font-size:11px;font-weight:700;letter-spacing:.08em;margin-bottom:10px;">STATUS OPERACIONAL</div>'
+        f'<div style="display:flex;align-items:center;gap:14px;">'
+        f'<div style="width:16px;height:16px;border-radius:50%;background:{status_cor};box-shadow:0 0 18px {status_cor};"></div>'
+        f'<div style="color:#FFFFFF;font-size:34px;font-weight:900;line-height:1;">{status_operacao}</div>'
+        f'</div>'
+        f'</div>'
+        f'<div style="display:flex;gap:42px;flex-wrap:wrap;">'
+        f'<div><div style="color:#8FA5BC;font-size:11px;margin-bottom:6px;">SLA GLOBAL</div><div style="color:#FFFFFF;font-size:26px;font-weight:800;">{sla_percentual:.0f}%</div></div>'
+        f'<div><div style="color:#8FA5BC;font-size:11px;margin-bottom:6px;">DEMANDAS ATIVAS</div><div style="color:#FFFFFF;font-size:26px;font-weight:800;">{ativas}</div></div>'
+        f'<div><div style="color:#8FA5BC;font-size:11px;margin-bottom:6px;">ATRASADAS</div><div style="color:#FF5C7A;font-size:26px;font-weight:800;">{total_atrasadas}</div></div>'
+        f'</div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
     st.markdown("#### Produtividade")
-    c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric("Concluídas", total_concluidas)
-    c2.metric("Tempo médio (h)", f"{tempo_medio:.1f}")
-    c3.metric("SLA cumprido", f"{sla_percentual:.0f}%")
-    c4.metric("Atrasadas", total_atrasadas)
+    cards_produtividade = [
+        ("Concluídas", total_concluidas, "Demandas finalizadas"),
+        ("Tempo médio (h)", f"{tempo_medio:.1f}", "Tempo médio de resolução"),
+        ("SLA cumprido", f"{sla_percentual:.0f}%", "Percentual dentro do prazo"),
+        ("Atrasadas", total_atrasadas, "Demandas fora do SLA"),
+    ]
 
-    st.markdown("#### Operação atual")
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    cols_produtividade = st.columns(4)
 
-    col1.metric("Total", total)
-    col2.metric("Ativas", ativas)
-    col3.metric("+24h", criticas_24h)
-    col4.metric("+48h", criticas_48h)
-    col5.metric("Sem atendente", sem_atendente)
-    col6.metric("Finalizadas", total_concluidas)
-
-    st.markdown("---")
-
-    st.markdown("#### Fila crítica")
-    st.caption("Demandas abertas com maior risco operacional.")
-
-    fila = df_ativas.sort_values(
-        by=["horas_aberta", "prioridade"],
-        ascending=[False, True],
-    ).head(10)
-
-    if fila.empty:
-        st.success("Nenhuma demanda ativa no momento.")
-    else:
-        for _, row in fila.iterrows():
-            horas = float(row["horas_aberta"])
-
-            if horas >= 48:
-                alerta = "🔴"
-                fundo = "rgba(160,40,40,0.22)"
-                borda = "rgba(255,90,90,0.50)"
-            elif horas >= 24:
-                alerta = "🟡"
-                fundo = "rgba(170,130,25,0.22)"
-                borda = "rgba(255,200,80,0.50)"
-            else:
-                alerta = "🟢"
-                fundo = "rgba(255,255,255,0.025)"
-                borda = "rgba(120,145,170,0.20)"
-
+    for col, (titulo, valor, footer) in zip(cols_produtividade, cards_produtividade):
+        with col:
             st.markdown(
                 f"""
-                <div style="
-                    border:1px solid {borda};
-                    border-radius:14px;
-                    padding:12px 14px;
-                    margin-bottom:8px;
-                    background:{fundo};
-                ">
-                    <b>{alerta} #{int(row['id'])} • {html.escape(str(row['titulo']))}</b><br>
-                    Cliente: {html.escape(str(row.get('cliente_nome') or row.get('cliente') or '-'))}
-                    • Prioridade: <b>{html.escape(str(row.get('prioridade') or '-'))}</b>
-                    • Status: <b>{formatar_status_texto(row['status_norm'])}</b>
-                    • Aberta há: <b>{horas:.1f}h</b>
-                    • Atendente: <b>{html.escape(str(row.get('atendente_nome') or 'Não atribuído'))}</b>
+                <div class="bv-kpi-card">
+                    <div class="bv-kpi-label">{titulo}</div>
+                    <div class="bv-kpi-value">{valor}</div>
+                    <div class="bv-kpi-footer">{footer}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
+    st.markdown(
+        """
+        <div style="font-size:20px;font-weight:800;color:#EAF2FF;margin:22px 0 18px 0;">
+            Operação atual
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cards = [
+        ("Total", total, "Demandas registradas"),
+        ("Ativas", ativas, "Em andamento"),
+        ("+24h", criticas_24h, "Atenção operacional"),
+        ("+48h", criticas_48h, "Risco crítico"),
+        ("Sem atendente", sem_atendente, "Necessitam atribuição"),
+        ("Finalizadas", total_concluidas, "Demandas concluídas"),
+    ]
+
+    cols = st.columns(6)
+
+    for col, (titulo, valor, footer) in zip(cols, cards):
+        with col:
+            st.markdown(
+                f"""
+                <div class="bv-kpi-card">
+                    <div class="bv-kpi-label">{titulo}</div>
+                    <div class="bv-kpi-value">{valor}</div>
+                    <div class="bv-kpi-footer">{footer}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("""
+            <style>
+            .bv-kpi-card {
+                background: linear-gradient(
+                    180deg,
+                    rgba(255,255,255,0.045) 0%,
+                    rgba(255,255,255,0.02) 100%
+                );
+
+                border: 1px solid rgba(120,145,170,0.16);
+                border-radius: 18px;
+
+                padding: 22px;
+                min-height: 125px;
+
+                backdrop-filter: blur(10px);
+
+                transition: all .18s ease;
+            }
+
+            .bv-kpi-card:hover {
+                transform: translateY(-2px);
+                border: 1px solid rgba(120,166,255,0.28);
+            }
+
+            .bv-kpi-title {
+                color: #8FA5BC;
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: .02em;
+                margin-bottom: 12px;
+            }
+
+            .bv-kpi-value {
+                color: #FFFFFF;
+                font-size: 34px;
+                font-weight: 800;
+                line-height: 1;
+            }
+
+            .bv-kpi-footer {
+                color: #7D91A5;
+                font-size: 11px;
+                margin-top: 12px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
     st.markdown("---")
+    st.markdown("#### Performance da Equipe")
+
+    if df_concluidas.empty:
+        st.info("Ainda não há demandas concluídas suficientes para gerar ranking de atendentes.")
+    else:
+        ranking_atendentes = df_concluidas.copy()
+        ranking_atendentes["atendente_nome"] = ranking_atendentes["atendente_nome"].fillna("Não atribuído")
+
+        ranking_atendentes = (
+            ranking_atendentes
+            .groupby("atendente_nome")
+            .agg(
+                concluidas=("id", "count"),
+                tempo_medio_horas=("tempo_horas", "mean"),
+                sla_percentual=("dentro_sla", "mean"),
+            )
+            .reset_index()
+        )
+
+        ranking_atendentes["sla_percentual"] = ranking_atendentes["sla_percentual"] * 100
+
+        ranking_atendentes = ranking_atendentes.sort_values(
+            by=["sla_percentual", "concluidas"],
+            ascending=[False, False],
+        )
+
+        ranking_exibicao = ranking_atendentes.copy()
+        ranking_exibicao["SLA"] = ranking_exibicao["sla_percentual"].map(lambda x: f"{x:.0f}%")
+        ranking_exibicao["Tempo médio (h)"] = ranking_exibicao["tempo_medio_horas"].map(lambda x: f"{x:.1f}")
+        ranking_exibicao = ranking_exibicao.rename(
+            columns={
+                "atendente_nome": "Atendente",
+                "concluidas": "Concluídas",
+            }
+        )
+
+        for posicao, row_rank in ranking_exibicao.iterrows():
+            posicao_rank = posicao + 1
+
+            atendente = html.escape(str(row_rank["Atendente"]))
+            concluidas = row_rank["Concluídas"]
+            sla = row_rank["SLA"]
+            tempo = row_rank["Tempo médio (h)"]
+
+            if posicao_rank == 1:
+                destaque = "#F5C451"
+                label = "TOP 1"
+            elif posicao_rank == 2:
+                destaque = "#B8C2CC"
+                label = "TOP 2"
+            elif posicao_rank == 3:
+                destaque = "#C78B5A"
+                label = "TOP 3"
+            else:
+                destaque = "#5EA8FF"
+                label = f"#{posicao_rank}"
+
+            ranking_html = (
+                f'<div style="display:grid;grid-template-columns:72px 1fr 120px 120px 140px;'
+                f'gap:14px;align-items:center;background:rgba(255,255,255,0.035);'
+                f'border:1px solid rgba(120,145,170,0.16);border-left:4px solid {destaque};'
+                f'border-radius:16px;padding:14px 16px;margin-bottom:10px;">'
+                f'<div style="color:{destaque};font-size:15px;font-weight:900;">{label}</div>'
+                f'<div style="color:#FFFFFF;font-size:15px;font-weight:800;">{atendente}</div>'
+                f'<div style="color:#D8E2EE;font-size:12px;">Concluídas<br><b style="font-size:18px;color:#FFFFFF;">{concluidas}</b></div>'
+                f'<div style="color:#D8E2EE;font-size:12px;">SLA<br><b style="font-size:18px;color:{destaque};">{sla}</b></div>'
+                f'<div style="color:#D8E2EE;font-size:12px;">Tempo médio<br><b style="font-size:18px;color:#FFFFFF;">{tempo}h</b></div>'
+                f'</div>'
+            )
+
+            st.markdown(ranking_html, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    fila = df_ativas.copy()
+    fila = fila.sort_values(
+        by=["horas_aberta"],
+        ascending=False,
+    )
+
+    st.markdown("#### Demandas críticas por SLA")
+
+    if fila.empty:
+        st.success("Nenhuma demanda crítica no momento.")
+    else:
+        for _, row in fila.iterrows():
+            status_atual = normalizar_status(row.get("status_norm"))
+            cliente_nome = str(row.get("cliente_nome") or row.get("cliente") or "-")
+            prioridade = str(row.get("prioridade") or "-")
+            atendente_nome = str(row.get("atendente_nome") or "Não atribuído")
+            horas_abertas = float(row.get("horas_aberta") or 0)
+            titulo = html.escape(str(row.get("titulo") or "-"))
+
+            card_html = (
+                f'<div style="background:linear-gradient(90deg,rgba(70,10,20,0.55) 0%,rgba(40,10,20,0.45) 100%);'
+                f'border:1px solid rgba(255,70,90,0.55);border-radius:14px;padding:14px 16px;margin-bottom:12px;">'
+                f'<div style="font-size:15px;font-weight:800;color:#FFFFFF;margin-bottom:8px;">'
+                f'#{int(row["id"])} • {titulo}</div>'
+                f'<div style="color:#D8E2EE;font-size:13px;line-height:1.7;">'
+                f'Cliente: {html.escape(cliente_nome)} '
+                f'• Prioridade: <b>{html.escape(prioridade)}</b> '
+                f'• Status: {status_badge_html(status_atual)}'
+                f'<br>'
+                f'Aberta há: <b>{horas_abertas:.1f}h</b> '
+                f'• Atendente: <b>{html.escape(atendente_nome)}</b>'
+                f'</div></div>'
+            )
+
+            st.markdown(card_html, unsafe_allow_html=True)
 
     g1, g2 = st.columns(2)
 
