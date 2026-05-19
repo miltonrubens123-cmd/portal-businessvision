@@ -1935,6 +1935,7 @@ def render_sidebar_menu(menu_options, current_menu, logo_b64):
         "Demandas Solicitadas": "demandas",
         "Nova Solicitação": "nova",
         "Solicitação de Projeto": "projetos",
+        "Novo Projeto": "projetos",
         "Cadastro de Clientes": "clientes",
         "Cadastro de Atendentes": "atendentes",
         "Painel de Cadastros": "cadastros",
@@ -3042,7 +3043,10 @@ elif menu == "Novo Projeto":
                             f"Cliente: {projeto.get('cliente_nome') or projeto.get('cliente_usuario') or '-'}"
                         )
                 with c4:
-                    st.write(f"Status: **{formatar_status_projeto(status_atual)}**")
+                    st.markdown(
+                        f"Status: {formatar_status_projeto(status_atual)}",
+                        unsafe_allow_html=True,
+                    )
                     if projeto.get("created_at"):
                         st.caption(projeto["created_at"].strftime("%d/%m/%Y %H:%M"))
 
