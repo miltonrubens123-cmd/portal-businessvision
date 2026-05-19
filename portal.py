@@ -966,37 +966,18 @@ def formatar_status_projeto(status):
     }
 
     cor = estilos.get(status, "#AAB7C4")
+    status_seguro = html.escape(status)
 
-    return f"""
-    <span style="
-        display:inline-flex;
-        align-items:center;
-        gap:7px;
-
-        padding:4px 10px;
-
-        border-radius:999px;
-
-        background:rgba(255,255,255,0.04);
-
-        border:1px solid rgba(120,145,170,0.18);
-
-        color:{cor};
-
-        font-size:12px;
-        font-weight:800;
-
-        white-space:nowrap;
-    ">
-
-        <svg width="8" height="8" viewBox="0 0 8 8">
-            <circle cx="4" cy="4" r="4" fill="{cor}"/>
-        </svg>
-
-        {html.escape(status)}
-
-    </span>
-    """
+    return (
+        f'<span style="display:inline-flex;align-items:center;gap:7px;'
+        f'padding:4px 10px;border-radius:999px;'
+        f'background:rgba(255,255,255,0.04);'
+        f'border:1px solid rgba(120,145,170,0.18);'
+        f'color:{cor};font-size:12px;font-weight:800;white-space:nowrap;">'
+        f'<svg width="8" height="8" viewBox="0 0 8 8">'
+        f'<circle cx="4" cy="4" r="4" fill="{cor}"></circle>'
+        f'</svg>{status_seguro}</span>'
+    )
 
 
 def obter_briefings_filtrados(
