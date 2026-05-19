@@ -836,7 +836,7 @@ def render_anexos_como_arquivo(solicitacao_id, prefixo="anexo"):
                 use_container_width=False,
             )
 
-
+@st.cache_data(ttl=30, show_spinner=False)
 def obter_solicitacoes_filtradas(
     cliente_id=None,
     cliente_usuario=None,
@@ -847,11 +847,13 @@ def obter_solicitacoes_filtradas(
     limite=50,
     atendente_usuario=None,
 ):
+
     filtros = []
     params = []
 
     if atendente_usuario:
         atendente = obter_atendente_por_usuario(atendente_usuario)
+
         if atendente:
             filtros.append("s.atendente_id = %s")
             params.append(atendente["id"])
@@ -863,9 +865,11 @@ def obter_solicitacoes_filtradas(
             "(s.cliente_id = %s OR (s.cliente_id IS NULL AND s.cliente = %s))"
         )
         params.extend([cliente_id, cliente_usuario or ""])
+
     elif empresa_id is not None:
         filtros.append("s.empresa_id = %s")
         params.append(empresa_id)
+
     elif cliente_usuario:
         filtros.append("s.cliente = %s")
         params.append(cliente_usuario)
@@ -889,14 +893,27 @@ def obter_solicitacoes_filtradas(
         params.append(prioridade_filtro)
 
     busca = (busca or "").strip()
+
     if busca:
-        if busca.isdigit():
-            filtros.append("(CAST(s.id AS TEXT) = %s OR s.titulo ILIKE %s)")
-            params.append(busca)
-            params.append(f"%{busca}%")
-        else:
-            filtros.append("s.titulo ILIKE %s")
-            params.append(f"%{busca}%")
+        filtros.append(
+            """
+            (
+                CAST(s.id AS TEXT) ILIKE %s
+                OR s.titulo ILIKE %s
+                OR s.descricao ILIKE %s
+                OR COALESCE(c.nome, '') ILIKE %s
+            )
+            """
+        )
+
+        termo = f"%{busca}%"
+
+        params.extend([
+            termo,
+            termo,
+            termo,
+            termo,
+        ])
 
     where_clause = " AND ".join(filtros) if filtros else "TRUE"
 
@@ -907,7 +924,11 @@ def obter_solicitacoes_filtradas(
             s.cliente_id,
             s.empresa_id,
             s.atendente_id,
+
             a.nome AS atendente_nome,
+
+            c.nome AS cliente_nome,
+
             s.atribuido_em,
             s.titulo,
             s.descricao,
@@ -918,22 +939,34 @@ def obter_solicitacoes_filtradas(
             s.data_criacao,
             s.inicio_atendimento,
             s.fim_atendimento
+
         FROM solicitacoes s
-        LEFT JOIN atendentes a ON a.id = s.atendente_id
+
+        LEFT JOIN atendentes a
+            ON a.id = s.atendente_id
+
+        LEFT JOIN clientes c
+            ON c.id = s.cliente_id
+
         WHERE {where_clause}
+
         ORDER BY s.id DESC
+
         LIMIT %s
     """
+
     params.append(limite)
 
     rows = conn.execute(sql, params).fetchall()
+
     dados = []
+
     for row in rows:
         item = dict(row)
         item["status"] = normalizar_status(item.get("status"))
         dados.append(item)
-    return dados
 
+    return dados
 
 def normalizar_status_projeto(status):
     mapa = {
