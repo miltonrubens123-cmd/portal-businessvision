@@ -2871,9 +2871,7 @@ elif menu == "Demandas Solicitadas":
 elif menu == "Novo Projeto":
     st.header("Novo Projeto")
     st.caption(
-        """
-    Descreva o projeto que você precisa. Nossa equipe irá analisar e retornar com a melhor solução.
-    """
+        "Descreva o projeto que você precisa. Nossa equipe irá analisar e retornar com a melhor solução."
     )
 
     status_opcoes_projeto = [
@@ -2888,9 +2886,13 @@ elif menu == "Novo Projeto":
         "Cancelado",
     ]
 
+    if "projeto_aberto_id" not in st.session_state:
+        st.session_state.projeto_aberto_id = None
+
     if perfil_atual in ["admin", "cliente"]:
         with st.expander(
-            "Nova solicitação de projeto", expanded=perfil_atual == "cliente"
+            "Nova solicitação de projeto",
+            expanded=perfil_atual == "cliente",
         ):
             if perfil_atual == "admin":
                 clientes_ativos = conn.execute(
@@ -2902,6 +2904,7 @@ elif menu == "Novo Projeto":
                     ORDER BY c.nome, c.usuario
                     """
                 ).fetchall()
+
                 if clientes_ativos:
                     lista_clientes = [
                         f"{row['nome']} ({row['usuario']}) • {row.get('empresa') or 'Sem empresa'}"
@@ -2928,9 +2931,7 @@ elif menu == "Novo Projeto":
                 )
 
             titulo_projeto = st.text_input("Título do projeto", key="briefing_titulo")
-            objetivo_projeto = st.text_input(
-                "Objetivo principal", key="briefing_objetivo"
-            )
+            objetivo_projeto = st.text_input("Objetivo principal", key="briefing_objetivo")
             descricao_projeto = st.text_area(
                 "Descreva o que precisa",
                 key="briefing_descricao",
@@ -2944,9 +2945,7 @@ elif menu == "Novo Projeto":
                 key="briefing_prioridade",
             )
 
-            if st.button(
-                "Enviar briefing", key="enviar_briefing", use_container_width=True
-            ):
+            if st.button("Enviar briefing", key="enviar_briefing", use_container_width=True):
                 if not cliente_briefing or not cliente_briefing.get("id"):
                     st.error("Não foi possível identificar o cliente.")
                 elif not cliente_briefing.get("empresa_id"):
@@ -2972,6 +2971,7 @@ elif menu == "Novo Projeto":
                             agora(),
                         ),
                     ).fetchone()
+
                     conn.execute(
                         """
                         INSERT INTO projetos_etapas
@@ -2986,6 +2986,7 @@ elif menu == "Novo Projeto":
                             agora(),
                         ),
                     )
+
                     st.success(f"Briefing #{projeto['id']} enviado com sucesso.")
                     st.rerun()
 
@@ -2999,12 +3000,15 @@ elif menu == "Novo Projeto":
         )
     with f2:
         busca_projeto = st.text_input(
-            "Buscar por ID, título, descrição ou cliente", key="busca_briefing"
+            "Buscar por ID, título, descrição ou cliente",
+            key="busca_briefing",
         )
 
     if perfil_atual == "admin":
         projetos = obter_briefings_filtrados(
-            status_filtro=status_filtro_projeto, busca=busca_projeto, limite=300
+            status_filtro=status_filtro_projeto,
+            busca=busca_projeto,
+            limite=300,
         )
     elif perfil_atual == "cliente":
         cliente_logado = obter_cliente_por_usuario(st.session_state.usuario)
@@ -3016,126 +3020,180 @@ elif menu == "Novo Projeto":
         )
     else:
         projetos = []
-        st.info("Perfil de atendente não possui acesso ao Solicitação de Projetos.")
+        st.info("Perfil de atendente não possui acesso ao Novo Projeto.")
 
     if not projetos:
         st.info("Nenhum briefing encontrado com os filtros aplicados.")
     else:
         projetos, _, _ = paginar_registros(
-            projetos, "pagina_briefing_projetos", page_size=8
+            projetos,
+            "pagina_briefing_projetos",
+            page_size=8,
         )
+
         for projeto in projetos:
             projeto_id = int(projeto["id"])
             status_atual = normalizar_status_projeto(projeto.get("status"))
+            status_html = formatar_status_projeto(status_atual)
+
+            data_txt = "-"
+            if projeto.get("created_at"):
+                data_txt = projeto["created_at"].strftime("%d/%m/%Y %H:%M")
+
+            descricao_curta = projeto.get("descricao") or ""
+            if len(descricao_curta) > 180:
+                descricao_curta = descricao_curta[:180] + "..."
+
             with st.container(border=True):
-                c1, c2, c3, c4 = st.columns([0.7, 3.2, 1.5, 1.6])
+                c1, c2, c3, c4 = st.columns([0.7, 3.2, 1.5, 1.8])
+
                 with c1:
-                    st.write(f"**#{projeto_id}**")
+                    st.markdown(f"**#{projeto_id}**")
+
                 with c2:
-                    st.write(f"**{projeto['titulo']}**")
-                    st.caption(projeto.get("descricao") or "")
+                    st.markdown(f"**{html.escape(str(projeto.get('titulo') or '-'))}**")
+                    st.caption(descricao_curta)
+
                     if projeto.get("objetivo"):
-                        st.caption(f"Objetivo: {projeto['objetivo']}")
+                        st.caption(f"Objetivo: {projeto.get('objetivo')}")
+
                 with c3:
-                    st.write(f"Prioridade: **{projeto.get('prioridade') or '-'}**")
+                    st.markdown(
+                        f"Prioridade: **{html.escape(str(projeto.get('prioridade') or '-'))}**"
+                    )
+
                     if perfil_atual == "admin":
                         st.caption(
                             f"Cliente: {projeto.get('cliente_nome') or projeto.get('cliente_usuario') or '-'}"
                         )
+
                 with c4:
                     st.markdown(
-                        f"Status: {formatar_status_projeto(status_atual)}",
+                        f"""
+                        <div style="font-size:14px;color:#EAF2FF;margin-bottom:8px;">
+                            Status: {status_html}
+                        </div>
+                        <div style="font-size:12px;color:#8FA5BC;">
+                            {data_txt}
+                        </div>
+                        """,
                         unsafe_allow_html=True,
                     )
-                    if projeto.get("created_at"):
-                        st.caption(projeto["created_at"].strftime("%d/%m/%Y %H:%M"))
 
-                with st.expander(f"Timeline do briefing #{projeto_id}", expanded=False):
+                abrir = st.button(
+                    "Abrir detalhes" if st.session_state.projeto_aberto_id != projeto_id else "Fechar detalhes",
+                    key=f"abrir_projeto_{projeto_id}",
+                    use_container_width=True,
+                )
+
+                if abrir:
+                    if st.session_state.projeto_aberto_id == projeto_id:
+                        st.session_state.projeto_aberto_id = None
+                    else:
+                        st.session_state.projeto_aberto_id = projeto_id
+                    st.rerun()
+
+                if st.session_state.projeto_aberto_id == projeto_id:
+                    st.markdown("---")
+                    st.markdown("**Timeline do briefing**")
+
                     render_timeline_projeto(
                         projeto_id,
                         somente_visiveis=(perfil_atual != "admin"),
                     )
 
-                if perfil_atual == "admin":
-                    st.markdown("**Atualização administrativa**")
-                    a1, a2 = st.columns([1.2, 2.8])
-                    with a1:
-                        status_sem_todos = status_opcoes_projeto[1:]
-                        idx_status = (
-                            status_sem_todos.index(status_atual)
-                            if status_atual in status_sem_todos
-                            else 0
-                        )
-                        novo_status_projeto = st.selectbox(
-                            "Status",
-                            status_sem_todos,
-                            index=idx_status,
-                            key=f"status_projeto_{projeto_id}",
-                        )
-                        visivel_cliente = st.checkbox(
-                            "Visível para o cliente",
-                            value=True,
-                            key=f"visivel_etapa_{projeto_id}",
-                        )
-                    with a2:
-                        nova_etapa = st.text_input(
-                            "Etapa / título do registro",
-                            key=f"etapa_projeto_{projeto_id}",
-                            placeholder="Ex.: Levantamento técnico realizado",
-                        )
-                        obs_etapa = st.text_area(
-                            "Observação da etapa",
-                            key=f"obs_projeto_{projeto_id}",
-                            height=90,
-                            placeholder="Registro técnico/comercial do andamento. O cliente só verá se estiver marcado como visível.",
-                        )
+                    if perfil_atual == "admin":
+                        st.markdown("**Atualização administrativa**")
 
-                    b1, b2 = st.columns([1.2, 3])
-                    with b1:
-                        if st.button(
-                            "Salvar etapa",
-                            key=f"salvar_etapa_{projeto_id}",
-                            use_container_width=True,
-                        ):
-                            if (
-                                not nova_etapa.strip()
-                                and not obs_etapa.strip()
-                                and novo_status_projeto == status_atual
+                        a1, a2 = st.columns([1.2, 2.8])
+
+                        with a1:
+                            status_sem_todos = status_opcoes_projeto[1:]
+                            idx_status = (
+                                status_sem_todos.index(status_atual)
+                                if status_atual in status_sem_todos
+                                else 0
+                            )
+
+                            novo_status_projeto = st.selectbox(
+                                "Status",
+                                status_sem_todos,
+                                index=idx_status,
+                                key=f"status_projeto_{projeto_id}",
+                            )
+
+                            visivel_cliente = st.checkbox(
+                                "Visível para o cliente",
+                                value=True,
+                                key=f"visivel_etapa_{projeto_id}",
+                            )
+
+                        with a2:
+                            nova_etapa = st.text_input(
+                                "Etapa / título do registro",
+                                key=f"etapa_projeto_{projeto_id}",
+                                placeholder="Ex.: Levantamento técnico realizado",
+                            )
+
+                            obs_etapa = st.text_area(
+                                "Observação da etapa",
+                                key=f"obs_projeto_{projeto_id}",
+                                height=90,
+                                placeholder="Registro técnico/comercial do andamento.",
+                            )
+
+                        b1, b2 = st.columns([1.2, 3])
+
+                        with b1:
+                            if st.button(
+                                "Salvar etapa",
+                                key=f"salvar_etapa_{projeto_id}",
+                                use_container_width=True,
                             ):
-                                st.error(
-                                    "Informe uma etapa, observação ou altere o status."
-                                )
-                            else:
-                                etapa_final = (
-                                    nova_etapa.strip()
-                                    or f"Status atualizado para {novo_status_projeto}"
-                                )
-                                conn.execute(
-                                    """
-                                    INSERT INTO projetos_etapas
-                                    (projeto_id, etapa, observacao, usuario, visivel_cliente, data_registro)
-                                    VALUES (%s, %s, %s, %s, %s, %s)
-                                    """,
-                                    (
-                                        projeto_id,
-                                        etapa_final,
-                                        obs_etapa.strip(),
-                                        st.session_state.usuario,
-                                        visivel_cliente,
-                                        agora(),
-                                    ),
-                                )
-                                conn.execute(
-                                    """
-                                    UPDATE projetos_briefing
-                                    SET status = %s,
-                                        atualizado_em = %s
-                                    WHERE id = %s
-                                    """,
-                                    (novo_status_projeto, agora(), projeto_id),
-                                )
-                                st.success("Etapa registrada com sucesso.")
-                                st.rerun()
+                                if (
+                                    not nova_etapa.strip()
+                                    and not obs_etapa.strip()
+                                    and novo_status_projeto == status_atual
+                                ):
+                                    st.error("Informe uma etapa, observação ou altere o status.")
+                                else:
+                                    etapa_final = (
+                                        nova_etapa.strip()
+                                        or f"Status atualizado para {novo_status_projeto}"
+                                    )
+
+                                    conn.execute(
+                                        """
+                                        INSERT INTO projetos_etapas
+                                        (projeto_id, etapa, observacao, usuario, visivel_cliente, data_registro)
+                                        VALUES (%s, %s, %s, %s, %s, %s)
+                                        """,
+                                        (
+                                            projeto_id,
+                                            etapa_final,
+                                            obs_etapa.strip(),
+                                            st.session_state.usuario,
+                                            visivel_cliente,
+                                            agora(),
+                                        ),
+                                    )
+
+                                    conn.execute(
+                                        """
+                                        UPDATE projetos_briefing
+                                        SET status = %s,
+                                            atualizado_em = %s
+                                        WHERE id = %s
+                                        """,
+                                        (
+                                            novo_status_projeto,
+                                            agora(),
+                                            projeto_id,
+                                        ),
+                                    )
+
+                                    st.success("Etapa registrada com sucesso.")
+                                    st.rerun()
 
 elif menu == "Dashboard" and perfil_atual == "admin":
     st.markdown("### Dashboard Executivo")
